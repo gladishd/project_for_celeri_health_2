@@ -1,0 +1,22 @@
+All plots done in ggplot2.
+
+We're going to look at percent change and modeling and all that, figuring out R^2 values, calculating percent change with and without weird data points like outliers and such.  It's essential that we find a mathematical measure which is better than just percent change.  This is going to involve looking at cook's distance, leverage and studentized residuals, doing a Bonferroni outlier test and understanding more fully the situation involving reported pain scores in order to distinguish between subjective pain relief and the actual results which the patients experience, knowing how the data were collected, looking at residual plots and doing a residual plot and/or drop-in deviance test to see how well our linear/non-linear model really fits as well as basic visualizations of the data.  This is all just for future reference.  Since we'll be looking at change, I will need to standardize the variables (subtract the mean and divide by sample standard deviation) but if we are working with percent change we won't need to do this.  To better understand why we are doing modeling in the first place, allow me to explain a bit about the process.  The steps are: 
+
+1.  The patient takes an assessment/questionnaire in the pain clinic before they get a device implanted.  The scores from this assessment are used for a baseline score.  
+2.  About 1 week later, the patient takes the same assessment and these scores are used to calculate percent change.  At this time, they also ask the patient for their subjective percent pain relief.  
+
+I'm serious when I say that doctors treat subject percent pain relief as the ultimate measure of whether the device was successful or not, but often the assessment numbers don't match what the the patient reports; their NRS score often remains the same but they report 0% improvement or alternatively 80% improvement for their subjective PPR.  
+
+Impact score is a newer measure; impact score correlates with subjective PPR significantly more than NRS which is good for us and we hope that it draws more physicians to our platform.  Like I've mentioned numerous times, when we have more longitudinal data we can see if these measures can predict whether a device will be successful or not.  
+
+As promised, I've run statistics on the promis_first_assessment_data_v1.1.csv dataset which has the scores for each patient's first PROMIS assessment.  This shows statistics for average total PROMIS score (all raw_scores added up), average score for 7 PROMIS instruments and average impact score for several demographic breakdowns; the whole population, age < 40, age 41-60, age 61-80 and age 80+, providing all results in excel format as well as in ggplot2 and showing interesting comparisons between the age groups; results include demonstrating that there are noticeable differences between the < 40 age group and 80+.  Anxiety, physical function and sleep look to be pretty different between the oldest and youngest age groups.  
+
+We still haven't made an actual model; one of my colleagues Chris has curated the missing data by substituting similar values, but like I said there isn't actually a model and so this page will be updated.  
+
+So to summarize, ~2000 assessments are done each week and they are done in many different formats, and the data I am working with is a standard, static format which definitely helps and yet we are still waiting for additional EMR data to come in so that we can do the modeling, while adding functionality to our application so doctors can do Telehealth visits easily, contacting and working with organizations such as Medtronic since getting physicians as customers has been very slow.  
+
+From a more data-oriented note the result_t_score is a derivative of result_score, impact_score is the sum of the result_score of 3 of the instruments - physical function, global pain, and pain interference - and the way in which the result_t_score is calculated is similar to a Z score but the scale is different (higher raw_score will be higher t_score).  
+
+HOW TO INTERPRET THE GRAPHS: 
+
+For most instruments, having a lower result_score is better; the lowest score you can have for pain interference is 4 which basically means pain doesn't interfere with your day to day life at all.  However, there are two instruments where lower score is worse: these are physical function and social participation.  It's meant to be interpreted as "high physical function is good" or "high social participation is good" while "low physical function is bad".  

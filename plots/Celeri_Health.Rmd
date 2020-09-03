@@ -1,0 +1,2481 @@
+---
+title: "Celeri_Health"
+author: "Dean Gladish"
+date: "March 20, 2020"
+output:
+  rmdformats::material:
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    highlight: tango
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(forcats)
+library(ggthemes)
+library(shiny)
+library(intrval)
+library(ggplot2)
+library(lubridate)
+library(shinyWidgets)
+library(readxl)
+library(dplyr)
+library(ggformula)
+library(readr)
+library(here)
+library(ggplot2)
+library(tidyverse)
+library(ggthemes)
+library(plyr)
+library(here)
+```
+
+```{r}
+stimpact_assessments <- read_tsv(here("projectdata", "stimpact_assessments.tsv"))
+stimpact_devices_v3 <- read_tsv(here("projectdata", "stimpact_devices_v3.tsv"))
+stimpact_patients <- read_tsv(here("projectdata", "stimpact_patients.tsv"))
+```
+
+```{r}
+# May 15, 2020.  Read in the hui3_scores.csv file.  
+# read_tsv doesn't work here.  
+stimpact_hui3 <- read_csv(here("OneDrive/Celeri Health/projectdata", "hui3_scores.csv"))
+```
+
+```{r}
+stimpact_assessments <- stimpact_assessments %>% mutate(month_finished = month(datetime_finished))
+```
+
+```{r}
+length(unique(stimpact_patients$id))
+```
+
+```{r}
+n_fun <- function(x){
+  return(data.frame(y = 0.95*26,
+                    label = length(x)))
+}
+
+median_result_score_for_each_physician <- ddply(stimpact_assessments, .(physician_id), summarise, med = median(na.omit(result_score)))
+scoreMonth <- ggplot(stimpact_assessments, aes(x = as.factor(physician_id), y = result_score)) + 
+  geom_boxplot() + 
+  theme_bw() + 
+  labs(x = "Month", y = "result_score") + 
+  geom_text(data = median_result_score_for_each_physician, aes(x = as.factor(physician_id), y = med, label = med), size = 3, vjust = -1, hjust = 0.5) + 
+  stat_summary(fun.data = n_fun, geom = "text")
+
+choices <- unique(stimpact_assessments$instrument_name)[2:17]
+alignCenter <- function(el) {
+  htmltools::tagAppendAttributes(el,
+    style="margin-left:auto;margin-right:auto;"
+  )
+}
+
+#ui <- fluidPage(
+#  plotOutput("plot"),
+#  sliderInput("ACCESS", "ACCESS Composite Range:",
+#    min = 1, 
+#    max = 6, 
+#    value = 6, 
+#    step = 1,
+#    ticks = FALSE, 
+#    value = FALSE, 
+#    animate=animationOptions(interval = 1000, loop = TRUE, playButton = shiny::icon("play", lib = "glyphicon"), pauseButton = shiny::icon("pause", lib = "glyphicon"))
+#  )
+#)
+
+ui <- fluidPage(
+  plotOutput("plot"), 
+  alignCenter(sliderTextInput(
+    inputId = "mySliderText",
+    label = "Instrument Name",
+    choices = choices,
+    selected = choices[3], 
+    animate=animationOptions(interval = 2000, loop = TRUE, playButton = shiny::icon("play", lib = "glyphicon"), pauseButton = shiny::icon("pause", lib = "glyphicon"))
+  ))
+)
+
+
+server <- function(input, output) {
+  median_result_score_for_each_physician <- reactive({
+  df <- ddply(subset(stimpact_assessments, instrument_name == input$mySliderText), .(physician_id), summarise, med = median(na.omit(result_score))) 
+  })
+  
+  
+  
+  output$plot <- renderPlot({
+    
+    
+    ggplot(subset(stimpact_assessments, instrument_name == input$mySliderText), 
+           aes(x = as.factor(physician_id), y = result_score)) + 
+  geom_boxplot() + 
+  theme(text = element_text(size = 9), 
+        panel.background = element_rect(size = 0.3, 
+                                        linetype = 6, 
+                                        fill = grDevices::rgb(0, 100, 100, 2, 
+                                                              maxColorValue = 100)),
+        panel.grid.major = element_line(size = 0.3, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        panel.grid.minor = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        axis.ticks = element_blank(), 
+        plot.title = element_text(family = "sans", color = "black", size = 12, face = "bold", hjust = 0.5)) + 
+  labs(x = "physician id", y = "result_score") + ggtitle(input$mySliderText) + 
+  geom_text(data = median_result_score_for_each_physician(), aes(x = as.factor(physician_id), y = med, label = med), size = 3, vjust = -1, hjust = 0.5) + 
+  stat_summary(fun.data = n_fun, geom = "text") + ylim(c(0, 25)) 
+  })
+}
+
+shinyApp(ui, server)
+```
+
+
+```{r}
+stimpact_patients <- stimpact_patients %>% mutate(month_of_birth = month(dob))
+```
+
+
+```{r}
+countObservations <- function(ds){
+  return(data.frame(y = 1, label = length(ds)))
+}
+
+monthOfBirthMedians <- ddply(stimpact_patients, .(gender), summarize, med = median(month_of_birth))
+
+ggplot(stimpact_patients, aes(x = gender, y = month_of_birth)) + 
+  geom_boxplot() + 
+  geom_text(data = monthOfBirthMedians, 
+            aes(x = gender, y = med, label = med), 
+            hjust = 0.5, vjust = -1, size = 2.8) + 
+  labs(x = "Gender", y = "Month of Birth") + 
+  stat_summary(fun.data = countObservations, geom = "text") + 
+  theme_light() + 
+  theme(text = element_text(size = 9), 
+        axis.ticks = element_blank(), 
+        plot.title = element_text(family = "sans", color = "black", size = 12, face = "bold", hjust = 0.5), 
+        panel.background = element_rect(size = 0.25, 
+                                        linetype = 6, 
+                                        fill = grDevices::rgb(100, 0, 100, 2, 
+                                                              maxColorValue = 100)),
+        panel.grid.major = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        panel.grid.minor = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        axis.text.y = element_text(angle=10, hjust=1)) + 
+  scale_y_continuous(breaks = seq(0, 12, 1))
+```
+
+```{r}
+
+scoreMedians <- ddply(stimpact_assessments, .(battery_assessment), summarize, med = median(result_score))
+
+ggplot(stimpact_assessments, aes(x = battery_assessment, y = result_score)) + 
+  geom_boxplot() + 
+  geom_text(data = scoreMedians, 
+            aes(x = battery_assessment, y = med, label = med), 
+            hjust = 0.5, vjust = -1, size = 2.8) + 
+  labs(x = "battery_assessment", y = "result_score") + 
+  stat_summary(fun.data = countObservations, geom = "text") + 
+  theme_light() + 
+  theme(text = element_text(size = 9), 
+        axis.ticks = element_blank(), 
+        plot.title = element_text(family = "sans", color = "black", size = 12, face = "bold", hjust = 0.5), 
+        panel.background = element_rect(size = 0.25, 
+                                        linetype = 6, 
+                                        fill = grDevices::rgb(100, 0, 0, 2, 
+                                                              maxColorValue = 100)),
+        panel.grid.major = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        panel.grid.minor = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        axis.text.y = element_text(angle=10, hjust=1)) 
+
+```
+
+```{r}
+scoreMedians <- ddply(stimpact_assessments, .(progress), summarize, med = median(result_score))
+
+ggplot(stimpact_assessments, aes(x = progress, y = result_score)) + 
+  geom_boxplot() + 
+  geom_text(data = scoreMedians, 
+            aes(x = progress, y = med, label = med), 
+            hjust = 0.5, vjust = -1, size = 2.8) + 
+  labs(x = "progress", y = "result_score") + 
+  stat_summary(fun.data = countObservations, geom = "text") + 
+  theme_light() + 
+  theme(text = element_text(size = 9), 
+        axis.ticks = element_blank(), 
+        plot.title = element_text(family = "sans", color = "black", size = 12, face = "bold", hjust = 0.5), 
+        panel.background = element_rect(size = 0.25, 
+                                        linetype = 6, 
+                                        fill = grDevices::rgb(0, 100, 0, 2, 
+                                                              maxColorValue = 100)),
+        panel.grid.major = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        panel.grid.minor = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        axis.text.y = element_text(angle=10, hjust=1)) 
+
+```
+
+
+```{r}
+library(ggplot2)
+library(RColorBrewer)
+
+colourCount = length(unique(stimpact_assessments$result_score))
+getPalette = colorRampPalette(brewer.pal(9, "Spectral"))
+mycolors = c(brewer.pal(name = "Spectral", n = 11), brewer.pal(name = "Blues", n = 9), brewer.pal(name = "Greens", n = 9))
+#for (val in c())
+
+ggplot(data = stimpact_assessments) + 
+  geom_bar(aes(x = month_finished, y = result_score, fill = factor(result_score)), stat = "identity", width = 1) +   geom_bar(aes(x = mean(month_finished), y = mean(subset(stimpact_assessments, !is.na(result_score))$result_score)), fill = "black", stat = "identity", width = sd(stimpact_assessments$result_score), alpha = 0.1) + 
+  scale_fill_manual(values = mycolors, name = "result_score") + 
+  coord_polar() + 
+  theme_minimal() + 
+  xlim(1,12) + 
+  xlab("month finished") + 
+  ylab("") 
+
+```
+
+
+```{r}
+dftemp <- stimpact_assessments
+
+
+
+dftemp <- dftemp %>% group_by(instrument_name) %>% mutate(result_SE_for_each_instrument = mean(result_standard_error), result_score_average_for_each_instrument = mean(result_score))
+dftemp <- subset(dftemp, !is.na(result_score))
+
+dftemp <- subset(dftemp, !is.na(result_SE_for_each_instrument))
+df <- data.frame(instrument = character(),
+                 mean = double(), 
+                 se = double(),
+                 stringsAsFactors=FALSE)
+df <- c()
+choices <- unique(dftemp$instrument_name)
+
+v2 <- c()
+
+for (i in 1:14) {
+  v <- as.vector(cbind(subset(dftemp, instrument_name == choices[i])[1,][23], subset(dftemp, instrument_name == choices[i])[1,][26], subset(dftemp, instrument_name == choices[i])[1,][27]))
+
+colnames(v) <- c("Instrument", "Standard_Error", "mean_result_score")
+
+rownames(v) <- c()
+
+v2 <- rbind(v, v2)
+}
+v2 <- as.data.frame(v2)
+
+v2$Instrument <- as.character(v2$Instrument)
+v2$Standard_Error <- as.numeric(v2$Standard_Error)
+v2$mean_result_score <- as.numeric(v2$mean_result_score)
+
+ggplot(v2, aes(x = Instrument, mean_result_score)) +
+  geom_errorbar(aes(ymax = mean_result_score + Standard_Error, ymin = mean_result_score - Standard_Error), width = 0) +
+  geom_point(size = 2) + 
+  theme(panel.background = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.text.x = element_text(angle=80, hjust=1), 
+        text = element_text(size = 10)) + 
+  guides(colour = FALSE) + 
+  xlab("")
+```
+
+
+
+
+```{r}
+library(viridis)
+colourCount = length(unique(stimpact_devices_v3$subjective_pain_relief))
+getPalette = colorRampPalette(brewer.pal(9, "Set1"))
+
+stimpact_devices_v3 <- stimpact_devices_v3 %>% mutate(diagnosis_shortened = sub("\\s.*","",diagnosis))
+```
+
+```{r}
+
+ggplot(stimpact_devices_v3, aes(x = diagnosis_shortened)) + 
+    geom_bar(aes(fill = forcats::fct_rev(as.character(as.numeric(sub("%","",(stimpact_devices_v3$subjective_pain_relief)))/100))), position = "stack") + 
+    facet_wrap(~`name`, nrow = 5, ncol = 3) + scale_fill_manual(values = c("#e6f2ff", "#f9e6ff", "#f2ccff", "#ecb3ff", "#e699ff", "#df80ff", "#d966ff", "#d24dff", "#cc33ff", "#c61aff", "#bf00ff", "#ac00e6", "#9900cc", "#730099", "#600080", "#260033", "#000000", "#ffffff"), name = "Subjective Pain Relief") + ylab("Count") + xlab("diagnosis") + theme(text = element_text(size = 8), panel.background = element_rect(size = 4, linetype = 3, fill = grDevices::rgb(50,100,40,20,maxColorValue = 100)), axis.ticks = element_blank()) + theme_economist_white() + ggtitle("stimpact_devices_v3 by diagnosis") + theme(axis.text.x = element_text(angle=90, hjust=0.5, vjust = .3))
+
+
+
+
+ggplot(stimpact_devices_v3, aes(x = type)) + 
+    geom_bar(aes(fill = forcats::fct_rev(as.character(as.numeric(sub("%","",(stimpact_devices_v3$subjective_pain_relief)))/100))), position = "stack") + 
+    facet_wrap(~`name`, nrow = 5, ncol = 3) + scale_fill_manual(values = c("#e6f2ff", "#f9e6ff", "#f2ccff", "#ecb3ff", "#e699ff", "#df80ff", "#d966ff", "#d24dff", "#cc33ff", "#c61aff", "#bf00ff", "#ac00e6", "#9900cc", "#730099", "#600080", "#260033", "#000000", "#ffffff"), name = "Subjective Pain Relief") + ylab("Count") + xlab("type") + theme(text = element_text(size = 8), panel.background = element_rect(size = 4, linetype = 3, fill = grDevices::rgb(50,100,40,20,maxColorValue = 100)), axis.ticks = element_blank()) + theme_economist_white() + ggtitle("stimpact_devices_v3 by type") + theme(axis.text.x = element_text(angle=0, hjust=0))
+
+ggplot(stimpact_devices_v3, aes(x = name_1)) + 
+    geom_bar(aes(fill = forcats::fct_rev(as.character(as.numeric(sub("%","",(stimpact_devices_v3$subjective_pain_relief)))/100))), position = "stack") + 
+    facet_wrap(~`name`, nrow = 5, ncol = 3) + scale_fill_manual(values = c("#e6f2ff", "#f9e6ff", "#f2ccff", "#ecb3ff", "#e699ff", "#df80ff", "#d966ff", "#d24dff", "#cc33ff", "#c61aff", "#bf00ff", "#ac00e6", "#9900cc", "#730099", "#600080", "#260033", "#000000", "#ffffff"), name = "Subjective Pain Relief") + ylab("Count") + xlab("name_1") + theme(text = element_text(size = 8), panel.background = element_rect(size = 4, linetype = 3, fill = grDevices::rgb(50,100,40,20,maxColorValue = 100)), axis.ticks = element_blank()) + theme_economist_white() + ggtitle("stimpact_devices_v3 by name_1") + theme(axis.text.x = element_text(angle=10, hjust=0.5, vjust = .3))
+
+
+ggplot(stimpact_devices_v3, aes(x = device_model_id)) + 
+    geom_bar(aes(fill = forcats::fct_rev(as.character(as.numeric(sub("%","",(stimpact_devices_v3$subjective_pain_relief)))/100))), position = "stack") + 
+    facet_wrap(~`name`, nrow = 5, ncol = 3) + scale_fill_manual(values = c("#e6f2ff", "#f9e6ff", "#f2ccff", "#ecb3ff", "#e699ff", "#df80ff", "#d966ff", "#d24dff", "#cc33ff", "#c61aff", "#bf00ff", "#ac00e6", "#9900cc", "#730099", "#600080", "#260033", "#000000", "#ffffff"), name = "Subjective Pain Relief") + ylab("Count") + xlab("device_model_id") + theme(text = element_text(size = 8), panel.background = element_rect(size = 4, linetype = 3, fill = grDevices::rgb(50,100,40,20,maxColorValue = 100)), axis.ticks = element_blank()) + theme_economist_white() + ggtitle("stimpact_devices_v3 by device_model_id") + theme(axis.text.x = element_text(angle=0, hjust=0))
+
+```
+
+### NEW DATA
+
+```{r}
+promis_first_assessment_data_v1_1 <- read_csv("projectdata/promis_first_assessment_data_v1.1.csv")
+```
+
+```{r}
+# Add an age column
+promis_first_assessment_data_v1_1 <- promis_first_assessment_data_v1_1 %>% 
+  mutate(age = as.period(interval(start = patient_dob, end = "2020-04-04"))$year)
+```
+
+```{r}
+testdf <- promis_first_assessment_data_v1_1  ## I JUST RENAMED IT AND REASSIGNED IT SO THAT THE ORIGINAL DOESN'T GET ALTERED.  It's the same dataset (not a subset for training/testing).  
+
+# Make age categorical
+testdf <- testdf %>% 
+  mutate(age_categorical = cut(age, c(-45, 39, 60, 80, 120), labels = c("< 40", "41-60", "61-80", "80+")))
+
+# Summary Statistics
+
+
+testdf <- testdf %>% group_by(instrument_name) %>% mutate(average_result_score_for_each_instrument = round(mean(na.omit(result_score)), 2), average_result_t_score_for_each_instrument = round(mean(na.omit(result_t_score)), 2), average_impact_score_for_each_instrument = round(mean(na.omit(impact_score)), 2))
+
+testdf <- testdf %>% group_by(instrument_name, age_categorical) %>% mutate(average_result_score_for_each_instrument_and_age_group = round(mean(na.omit(result_score)), 2), average_result_t_score_for_each_instrument_and_age_group = round(mean(na.omit(result_t_score)), 2), average_impact_score_for_each_instrument_and_age_group = round(mean(na.omit(impact_score)), 2))
+
+```
+
+```{r}
+# Constrain instruments to Chris's specifications.  
+testdf <- subset(testdf, instrument_name %in% c('PROMIS SF v1.0-Physical Function 4a', 'PROMIS SF v1.0-Pain Interference 4a', 'PROMIS SF v1.0-Depression 4a', 'PROMIS SF v2.0 - Ability to Participate Social 4a', 'PROMIS SF v1.0-Fatigue 4a', 'PROMIS-Global Pain', 'PROMIS SF v1.0-Anxiety 4a', 'PROMIS SF v1.0-Sleep Disturbance 4a'))
+```
+
+
+```{r}
+# Plots | THE LAST THREE TAKE A REALLY LONG TIME TO LOAD.  
+
+# Something is going on with age
+
+ggplot(testdf, mapping = aes(x = team_name, y = age)) + 
+  geom_boxplot(alpha = 1, color = "purple") + 
+  theme_bw() + 
+  labs(x = "team_name", y = "age") + 
+  #coord_fixed() + 
+  ggtitle("Age of patients") + 
+  theme(plot.title = element_text(family = "sans", color = "black", size = 8)) + 
+  theme(axis.text.x = element_text(angle=90, hjust=0, vjust = 0.4)) + 
+  theme(axis.ticks = element_blank())
+
+ggplot(data = testdf, aes(x = instrument_name, 
+                 y = age_categorical)) + 
+  geom_text(aes(label = average_result_score_for_each_instrument_and_age_group, color = average_result_score_for_each_instrument_and_age_group), size = 3.5, fontface = 'bold') + 
+  scale_color_gradient(high = "orange", low = "purple", name = "Average Result Score by \nInstrument and Age Group") + 
+  xlab("instrument name") + 
+  ylab("age group") + 
+  ggtitle("average result_score for each patient's first PROMIS assessment") + 
+   theme_minimal() + 
+  theme(legend.direction = "vertical", 
+        legend.justification = c(0,1), 
+        legend.position = c(0, 0.05), 
+        legend.text=element_text(size = 6, family = "sans", color = "black", face = "bold"),
+        legend.background = element_rect(fill = "honeydew", size = 1, linetype = "dotted"), 
+        legend.title =  element_text(family = "sans", color = "black", size = 6, face = "bold"), 
+        axis.title.x = element_text(family = "sans", face = "bold", color = "black", size = 8),
+        axis.title.y = element_text(family = "sans", face = "bold", color = "black", size = 8, margin = margin(0,0,0,0)), 
+        plot.title = element_text(family = "sans", color = "black", size = 12, face = "bold", hjust = 0.32)) + 
+  theme(axis.text.x = element_text(angle=90, hjust=0, vjust = 0.4)) + 
+  # geom_vline(xintercept = 3.5, col = "gray", lwd = .1, linetype = 6) + 
+  # geom_vline(xintercept = 5.5, col = "gray", lwd = .1, linetype = 6) + 
+  geom_segment(x = 3.5, xend = 3.5, y = 0.5, yend = 4.5, color = "black", linetype = 6) + 
+  geom_segment(x = 5.5, xend = 5.5, y = 0.5, yend = 4.5, color = "black", linetype = 6) + 
+  geom_segment(x=3.5, xend=5.5, y = 0.5, yend = 0.5, color = "black") + 
+  geom_segment(x=3.5, xend=5.5, y = 4.5, yend = 4.5, color = "black") + 
+  # geom_segment(x=5.5, xend=5.5, y = 0.5, yend = 5, color = "black") + 
+  # geom_vline(xintercept = 6.5, col = "gray", lwd = .1, linetype = 6) + 
+  # geom_vline(xintercept = 7.5, col = "gray", lwd = .1, linetype = 6) + 
+  geom_segment(x = 6.5, xend = 6.5, y = 0.5, yend = 4.5, color = "black", linetype = 6) + 
+  geom_segment(x = 7.5, xend = 7.5, y = 0.5, yend = 4.5, color = "black", linetype = 6) + 
+  
+  geom_segment(x = 6.5, xend = 7.5, y = 0.5, yend = 0.5, color = "black") + 
+  geom_segment(x = 6.5, xend = 7.5, y = 4.5, yend = 4.5, color = "black") + 
+  annotate("rect",
+           ymin = 0.5,
+           ymax = 4.5,
+           xmin = 3.5,
+           xmax = 5.5, 
+           fill = "red",
+           alpha=.05) + 
+  annotate("rect",
+           ymin = 0.5,
+           ymax = 4.5,
+           xmin = 6.5,
+           xmax = 7.5, 
+           fill = "yellow",
+           alpha=.05)
+
+ggplot(data = testdf, aes(x = instrument_name, 
+                 y = age_categorical)) + 
+  geom_text(aes(label = average_result_t_score_for_each_instrument_and_age_group, color = average_result_t_score_for_each_instrument_and_age_group), size = 3.5, fontface = 'bold') + 
+  scale_color_gradient(high = "green", low = "blue", name = "Average Result t-Score by \nInstrument and Age Group") + 
+  xlab("instrument name") + 
+  ylab("age group") + 
+  ggtitle("average result_t_score for each patient's first PROMIS assessment") + 
+   theme_minimal() + 
+  theme(legend.direction = "vertical", 
+        legend.justification = c(0,1), 
+        legend.position = c(0, 0.05), 
+        legend.text=element_text(size = 6, family = "sans", color = "black", face = "bold"),
+        legend.background = element_rect(fill = "ivory", size = 1, linetype = "dotted"), 
+        legend.title =  element_text(family = "sans", color = "black", size = 6, face = "bold"), 
+        axis.title.x = element_text(family = "sans", face = "bold", color = "black", size = 8),
+        axis.title.y = element_text(family = "sans", face = "bold", color = "black", size = 8, margin = margin(0,0,0,0)), 
+        plot.title = element_text(family = "sans", color = "black", size = 12, face = "bold", hjust = 0.32)) + 
+  theme(axis.text.x = element_text(angle=90, hjust=0, vjust = 0.4)) + 
+  # geom_vline(xintercept = 13.5, col = "gray", lwd = .1, linetype = 6) + 
+  # geom_vline(xintercept = 14.5, col = "gray", lwd = .1, linetype = 6) + 
+  # geom_vline(xintercept = 4.5, col = "gray", lwd = .1, linetype = 6) + 
+  # geom_vline(xintercept = 5.5, col = "gray", lwd = .1, linetype = 6) + 
+  geom_segment(x = 4.5, xend = 4.5, y = 0.5, yend = 4.5, color = "black", linetype = 6) + 
+  geom_segment(x = 5.5, xend = 5.5, y = 0.5, yend = 4.5, color = "black", linetype = 6) + 
+  # geom_segment(x=13.5, xend=14.5, y = 0.5, yend = 0.5, color = "black") + 
+  geom_segment(x=4.5, xend=5.5, y = 4.5, yend = 4.5, color = "black") + 
+  # geom_segment(x=13.5, xend=14.5, y = 5, yend = 5, color = "black") + 
+  geom_segment(x=4.5, xend=5.5, y = 0.5, yend = 0.5, color = "black") + 
+  # annotate("rect",
+  #          ymin = 0.5,
+  #          ymax = 5,
+  #          xmin = 13.5,
+  #          xmax = 14.5, 
+  #          fill = "purple",
+  #          alpha=.05) + 
+  annotate("rect",
+           ymin = 0.5,
+           ymax = 4.5,
+           xmin = 4.5,
+           xmax = 5.5, 
+           fill = "purple",
+           alpha=.05)
+
+ggplot(data = testdf, aes(x = instrument_name, 
+                 y = age_categorical)) + 
+  geom_text(aes(label = average_impact_score_for_each_instrument_and_age_group, color = average_impact_score_for_each_instrument_and_age_group), size = 3.5, fontface = 'bold') + 
+  scale_color_gradient(high = "red", low = "blue", name = "Average Impact Score by \nInstrument and Age Group") + 
+  xlab("instrument name") + 
+  ylab("age group") + 
+  ggtitle("average impact_score for each patient's first PROMIS assessment") + 
+   theme_minimal() + 
+  theme(legend.direction = "vertical", 
+        legend.justification = c(0,1), 
+        legend.position = c(0, 0.05), 
+        legend.text=element_text(size = 6, family = "sans", color = "black", face = "bold"),
+        legend.background = element_rect(fill = "azure", size = 1, linetype = "dotted"), 
+        legend.title =  element_text(family = "sans", color = "black", size = 6, face = "bold"), 
+        axis.title.x = element_text(family = "sans", face = "bold", color = "black", size = 8),
+        axis.title.y = element_text(family = "sans", face = "bold", color = "black", size = 8, margin = margin(0,0,0,0)), 
+        plot.title = element_text(family = "sans", color = "black", size = 12, face = "bold", hjust = 0.32)) + 
+  theme(axis.text.x = element_text(angle=90, hjust=0, vjust = 0.4)) + 
+  # geom_vline(xintercept = 19.5, col = "gray", lwd = .1, linetype = 6) + 
+  # geom_vline(xintercept = 18.5, col = "gray", lwd = .1, linetype = 6) + 
+  # geom_segment(x=18.5, xend=19.5, y = 0.5, yend = 0.5, color = "black") + 
+  # geom_segment(x=18.5, xend=19.5, y = 4.5, yend = 4.5, color = "black") + 
+  geom_segment(x = 0.5, xend = 8.5, y = 3.5, yend = 3.5, color = "black") + 
+  geom_segment(x = 0.5, xend = 8.5, y = 4.5, yend = 4.5, color = "black") + 
+  geom_segment(x = 0.5, xend = 0.5, y = 3.5, yend = 4.5, color = "black", linetype = 6) + 
+  geom_segment(x = 8.5, xend = 8.5, y = 3.5, yend = 4.5, color = "black", linetype = 6) + 
+  annotate("rect",
+           ymin = 3.5,
+           ymax = 4.5,
+           xmin = 0.5,
+           xmax = 8.5, 
+           fill = "orange",
+           alpha=.05)
+```
+
+
+```{r}
+testdf <- testdf %>% mutate(year_of_birth = format(as.Date(patient_dob, format="%d/%m/%Y"),"%Y"))
+```
+
+```{r}
+ggplot(testdf, mapping = aes(x = team_name, y = as.numeric(year_of_birth))) + 
+  geom_boxplot(alpha = 1, color = "purple") + 
+  theme_bw() + 
+  labs(x = "team_name", y = "year_of_birth") + 
+  #coord_fixed() + 
+  ggtitle("what's going on with patient_dob!?!?") + 
+  theme(plot.title = element_text(family = "sans", color = "black", size = 8)) + 
+  theme(axis.text.x = element_text(angle=90, hjust=0, vjust = 0.4)) + 
+  theme(axis.ticks = element_blank())
+
+```
+
+write_csv(testdf, "C:/Users/gladi/Desktop/asdf.csv")
+as.numeric(as.factor(testdf$instrument_name))
+```{r}
+choices <- unique(testdf$instrument_name)
+
+v2 <- c()
+
+for (i in 1:14) {
+  v <- as.vector(cbind(subset(testdf, instrument_name == choices[i])[1,][8], subset(testdf, instrument_name == choices[i])[1,][14], subset(testdf, instrument_name == choices[i])[1,][15], subset(testdf, instrument_name == choices[i])[1,][16]))
+
+colnames(v) <- c("instrument_name", "average_result_score", "average_result_t_score", "average_impact_score")
+
+rownames(v) <- c()
+
+v2 <- rbind(v, v2)
+}
+v2 <- as.data.frame(v2)
+```
+
+
+```{r}
+choices <- unique(testdf$instrument_name)
+choicesAge <- as.vector(unique(testdf$age_categorical))
+v3 <- c()
+
+for (i in 1:14) {
+  for (j in 1:4) {
+    v <- as.vector(cbind(subset(testdf, instrument_name == choices[i] & age_categorical == choicesAge[j])[1,][8], subset(testdf, instrument_name == choices[i] & age_categorical == choicesAge[j])[1,][13], subset(testdf, instrument_name == choices[i] & age_categorical == choicesAge[j])[1,][17], subset(testdf, instrument_name == choices[i] & age_categorical == choicesAge[j])[1,][18], subset(testdf, instrument_name == choices[i] & age_categorical == choicesAge[j])[1,][19]))
+  
+
+
+colnames(v) <- c("instrument_name", "age", "average_result_score", "average_result_t_score", "average_impact_score")
+
+rownames(v) <- c()
+
+v3 <- rbind(v, v3)
+}
+}
+v3 <- as.data.frame(v3)
+
+#write_csv(v3, "C:/Users/gladi/Desktop/averages2.csv")
+```
+
+```{r} 
+# OLD | DON'T RUN THIS
+v3 <- v3[-c(2,4),] #Removing NA values
+```
+
+```{r}
+# OLD | DON'T RUN THIS
+v3_2 <- v3[-c(2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,43,44,45,46),]
+
+v3_3 <- v3[-c(2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22),]
+```
+
+
+```{r}
+v2 <- v2[-c(1,2,3,4,5,6),]
+
+v2_tscorenasremoved <- v2[-c(6),]
+
+v3 <- v3[-c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24),]
+
+v3_tscorenasremoved <- v3[-c(21,22,23,24),]
+
+```
+
+
+```{r}
+ggplot(v3, aes(color = age)) + geom_point(aes(x = average_result_score, y = age), alpha = 0.9, shape = 18, size = 3, stroke = 1) + 
+  theme(text = element_text(size = 9), 
+        panel.background = element_rect(size = 0.3, 
+                                        linetype = 6, 
+                                        fill = grDevices::rgb(0, 100, 100, 5, 
+                                                              maxColorValue = 100)),
+        panel.grid.major = element_line(size = 0.3, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        panel.grid.minor = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        axis.ticks = element_blank()) + 
+  facet_wrap(~`instrument_name`, nrow = 2, ncol = 4) + guides(color = guide_legend(reverse = TRUE))
+
+ggplot(v3_tscorenasremoved, aes(color = age)) + geom_point(aes(x = average_result_t_score, y = age), alpha = 0.9, shape = 18, size = 3, stroke = 1) + 
+  theme(text = element_text(size = 9), 
+        panel.background = element_rect(size = 0.3, 
+                                        linetype = 6, 
+                                        fill = grDevices::rgb(50, 50, 10, 5, 
+                                                              maxColorValue = 100)),
+        panel.grid.major = element_line(size = 0.3, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        panel.grid.minor = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        axis.ticks = element_blank()) + 
+  facet_wrap(~`instrument_name`, nrow = 2, ncol = 4) + guides(color = guide_legend(reverse = TRUE))
+
+ggplot(v3, aes(color = age)) + geom_point(aes(x = average_impact_score, y = age), alpha = 0.9, shape = 18, size = 3, stroke = 1) + 
+  theme(text = element_text(size = 9), 
+        panel.background = element_rect(size = 0.3, 
+                                        linetype = 6, 
+                                        fill = grDevices::rgb(60, 20, 60, 5, 
+                                                              maxColorValue = 100)),
+        panel.grid.major = element_line(size = 0.3, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        panel.grid.minor = element_line(size = 0.25, 
+                                        linetype = 0,
+                                        colour = "white"), 
+        axis.ticks = element_blank()) + 
+  facet_wrap(~`instrument_name`, nrow = 2, ncol = 4) + guides(color = guide_legend(reverse = TRUE))
+```
+write_csv(v3, "C:/Users/gladi/Desktop/averages_by_age.csv")
+
+
+```{r}
+### MODELING WITH RANDOM FOREST 
+library(tidyverse)
+library(knitr)
+library(class)
+library(caret) #makes Train Control work
+library(randomForest) #allows us to make random forests
+library(rpart)     # fit decision trees
+library(partykit)  # plot nicer trees
+
+testdf <- as.data.frame(testdf)
+
+training_data <- testdf %>%
+  sample_n(size = 0.75*nrow(testdf), replace = FALSE, weight = NULL, .env = NULL) %>%
+  na.omit()
+
+testing_data <- testdf %>%
+  setdiff(training_data) %>%
+  na.omit()
+
+training_backup <- training_data
+```
+
+```{r}
+training_data <- training_data %>% 
+  mutate(team_id = as.factor(team_id), 
+         patient_id = as.factor(patient_id))
+
+testing_data <- testing_data %>% 
+  mutate(team_id = as.factor(team_id), 
+         patient_id = as.factor(patient_id))
+
+# Compute summary statistics 
+# These are important because we can unstandardize the predicted values.
+training_data_means <- training_data %>%  
+  summarize_if(is.numeric, mean, na.rm = TRUE) 
+
+training_data_sds <- training_data %>% 
+  summarize_if(is.numeric, sd, na.rm = TRUE)
+
+# We're going to need this function to standardize the data (put it on a normal distribution) 
+standardizer <- function(x, na.rm = FALSE) {
+  (x - mean(x, na.rm = na.rm)) / sd(x, na.rm = na.rm)
+}
+
+training_data <- training_data %>%
+  mutate_if(is.numeric, standardizer, na.rm = TRUE)
+
+# This part is crucial; we're standardizing both data sets.  However, we are using the values from our training dataset in order to standardize our testing dataset.  Otherwise, we won't know how our model will perform on this "new" data.  
+for(i in colnames(training_data_means)) {
+  testing_data[[i]] <- (testing_data[[i]] - training_data_means[[i]]) / training_data_sds[[i]]
+}
+
+
+
+set.seed(1922283) # For reproducibility
+
+# set importance of our predictors to be TRUE so we can see it
+# [,-1,] so that we don't include ID as a predictor, which has more than 53 categories anyway so will cause an error message.  
+#training_data <- training_data[,-1,][,-2,][,-4,][,-4,][,-2,]
+
+```
+
+
+
+
+
+```{r}
+training_data <- training_data %>% 
+  mutate(patient_gender = as.factor(patient_gender), 
+         instrument_name = as.factor(instrument_name))
+testing_data <- testing_data %>% 
+  mutate(patient_gender = as.factor(patient_gender), 
+         instrument_name = as.factor(instrument_name))
+```
+
+
+
+
+### THIS IS WHERE I START CUSTOMIZING THINGS.  
+```{r}
+training_data_smaller <- training_data %>%
+  sample_n(size = 0.25*nrow(training_data), replace = FALSE, weight = NULL, .env = NULL)
+
+training_data_smaller <- training_data_smaller[,c(1,5,8,9,11,12,13),]
+
+
+training_data_smaller <- training_data_smaller %>% mutate(team_name = as.factor(team_name), patient_gender = as.factor(patient_gender), instrument_name = as.factor(instrument_name), age_categorical = as.factor(age_categorical))
+
+testing_data_smaller <- testing_data %>%
+  sample_n(size = 0.25*nrow(testing_data), replace = FALSE, weight = NULL, .env = NULL)
+
+testing_data_smaller <- testing_data_smaller[,c(1,5,8,9,11,12,13),]
+
+testing_data_smaller <- testing_data_smaller %>% mutate(team_name = as.factor(team_name), patient_gender = as.factor(patient_gender), instrument_name = as.factor(instrument_name), 
+                                                        age_categorical = as.factor(age_categorical))
+
+# Fixes the levels so that the testing data can be used by the model which is very finicky
+
+
+# Keep sampling (running the code over and over again) until there aren't any errors for team name not overlapping.  
+levels(testing_data_smaller$team_name) <- levels(training_data_smaller$team_name)
+levels(testing_data_smaller$instrument_name) <- levels(training_data_smaller$instrument_name)
+levels(testing_data_smaller$age) <- levels(training_data_smaller$age)
+levels(testing_data_smaller$patient_gender) <- levels(training_data_smaller$patient_gender)
+levels(testing_data_smaller$age_categorical) <- levels(training_data_smaller$age_categorical)
+
+```
+
+```{r}
+forestResultScore <- randomForest(result_score ~ . - impact_score, data = training_data_smaller, importance = TRUE) 
+
+forestImpactScore <- randomForest(impact_score ~ . - result_score, data = training_data_smaller, importance = TRUE) 
+```
+
+```{r}
+
+
+
+
+result_score_PROMIS_SF_v1.0_Depression_4a <- randomForest(result_score ~ . - impact_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Depression 4a"), importance = TRUE) 
+impact_score_PROMIS_SF_v1.0_Depression_4a <- randomForest(impact_score ~ . - result_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Depression 4a"), importance = TRUE) 
+
+result_score_PROMIS_SF_v2.0_Ability_to_Participate_Social_4a <- randomForest(result_score ~ . - impact_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v2.0 - Ability to Participate Social 4a"), importance = TRUE) 
+impact_score_PROMIS_SF_v2.0_Ability_to_Participate_Social_4a <- randomForest(impact_score ~ . - result_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v2.0 - Ability to Participate Social 4a"), importance = TRUE) 
+
+result_score_PROMIS_SF_v1.0_Anxiety_4a <- randomForest(result_score ~ . - impact_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Anxiety 4a"), importance = TRUE) 
+impact_score_PROMIS_SF_v1.0_Anxiety_4a <- randomForest(impact_score ~ . - result_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Anxiety 4a"), importance = TRUE) 
+
+result_score_PROMIS_SF_v1.0_Pain_Interference_4a <- randomForest(result_score ~ . - impact_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Pain Interference 4a"), importance = TRUE) 
+impact_score_PROMIS_SF_v1.0_Pain_Interference_4a <- randomForest(impact_score ~ . - result_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Pain Interference 4a"), importance = TRUE) 
+
+result_score_PROMIS_SF_v1.0_Sleep_Disturbance_4a <- randomForest(result_score ~ . - impact_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Sleep Disturbance 4a"), importance = TRUE) 
+impact_score_PROMIS_SF_v1.0_Sleep_Disturbance_4a <- randomForest(impact_score ~ . - result_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Sleep Disturbance 4a"), importance = TRUE) 
+
+result_score_PROMIS_SF_v1.0_Physical_Function_4a <- randomForest(result_score ~ . - impact_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Physical Function 4a"), importance = TRUE) 
+impact_score_PROMIS_SF_v1.0_Physical_Function_4a <- randomForest(impact_score ~ . - result_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Physical Function 4a"), importance = TRUE) 
+
+result_score_PROMIS_SF_v1.0_Fatigue_4a <- randomForest(result_score ~ . - impact_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Fatigue 4a"), importance = TRUE) 
+impact_score_PROMIS_SF_v1.0_Fatigue_4a <- randomForest(impact_score ~ . - result_score - instrument_name, data = subset(training_data_smaller, instrument_name == "PROMIS SF v1.0-Fatigue 4a"), importance = TRUE) 
+```
+
+```{r}
+modelNames <- c("result_score_PROMIS_SF_v1.0_Depression_4a", "result_score_PROMIS_SF_v2.0_Ability_to_Participate_Social_4a", "result_score_PROMIS_SF_v1.0_Anxiety_4a", "result_score_PROMIS_SF_v1.0_Pain_Interference_4a", "result_score_PROMIS_SF_v1.0_Sleep_Disturbance_4a", "result_score_PROMIS_SF_v1.0_Physical_Function_4a", "result_score_PROMIS_SF_v1.0_Fatigue_4a", "impact_score_PROMIS_SF_v1.0_Depression_4a", "impact_score_PROMIS_SF_v2.0_Ability_to_Participate_Social_4a", "impact_score_PROMIS_SF_v1.0_Anxiety_4a", "impact_score_PROMIS_SF_v1.0_Pain_Interference_4a", "impact_score_PROMIS_SF_v1.0_Sleep_Disturbance_4a", "impact_score_PROMIS_SF_v1.0_Physical_Function_4a", "impact_score_PROMIS_SF_v1.0_Fatigue_4a")
+
+
+for (name in modelNames) {
+  model <- eval(parse(text = name))
+  varImpPlot(model, main = name)
+}
+```
+
+```{r}
+testing_data_smaller$predicted_result_score <- predict(forestResultScore, newdata = testing_data_smaller, type = "class") 
+
+testing_data_smaller$result_score_unstandardized <- ((testing_data_smaller$result_score)*training_data_sds$result_score) + training_data_means$result_score
+
+testing_data_smaller$predicted_result_score_unstandardized <- round(((testing_data_smaller$predicted_result_score)*training_data_sds$result_score) + training_data_means$result_score,0)
+
+########
+
+testing_data_smaller$predicted_impact_score <- predict(forestImpactScore, newdata = testing_data_smaller, type = "class") 
+
+testing_data_smaller$impact_score_unstandardized <- ((testing_data_smaller$impact_score)*training_data_sds$impact_score) + training_data_means$impact_score
+
+testing_data_smaller$predicted_impact_score_unstandardized <- round(((testing_data_smaller$predicted_impact_score)*training_data_sds$impact_score) + training_data_means$impact_score,0)
+```
+
+```{r}
+plot(forest, main = "number of trees and error rate")
+
+predictionsTable <- testing_data_smaller %>%
+  mutate(predicted_result_score = predict(forest, newdata = testing_data_smaller, type = "class")) 
+
+predictionsTable <- predictionsTable %>%
+  dplyr::count(result_score, predicted_result_score) %>%
+  spread(key = predicted_result_score, value = n)
+predictionsTable
+
+
+# Now let's look at the accuracy and error rate for our model on the testing set
+testing_data_smaller %>%
+  mutate(
+    predictions =  predict(forest, newdata = testing_data_smaller, type = "class") 
+  ) %>%
+  summarize(
+    ErrorTest = mean(result_score != predictions),
+    AccuracyTest = mean(result_score == predictions)
+  )
+
+varImpPlot(forest, main="variable importance for the result_score random forest model")
+```
+
+
+
+
+```{r}
+#Don't run this chunk unless you are looking for a better number of variables for splitting
+randomForestFunction <- function(mtryValue) {
+  randomForest(result_score ~ ., 
+                            data = training_data_smaller, 
+                            mtry = mtryValue, 
+                            importance = TRUE) 
+}
+
+# The number of variables available for splitting at each tree node is given by the mtry value, we want things to be more accurate so please feel free to modify.  I've included a graph of the error rate at different values.  
+OOBErrorValuesforGraph <- c()
+
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(1)$err.rate[,1]))
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(2)$err.rate[,1]))
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(3)$err.rate[,1]))
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(4)$err.rate[,1]))
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(5)$err.rate[,1]))
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(6)$err.rate[,1]))
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(7)$err.rate[,1]))
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(8)$err.rate[,1]))
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(9)$err.rate[,1]))
+OOBErrorValuesforGraph <- append(OOBErrorValuesforGraph, mean(randomForestFunction(10)$err.rate[,1]))
+
+
+plot(OOBErrorValuesforGraph)
+```
+
+```{r}
+
+```
+
+## Now, we're going to look at the categories for age.  
+
+```{r}
+barplot(table(testdf$age_categorical), main = "Bar Chart of Different Age Groups",
+xlab = "Age Group", ylab = "Count", col = c("red", "green", "yellow", "orange"))
+
+```
+
+
+```{r}
+boxplot(testdf$result_score ~ testdf$age_categorical, ylab = "result_score",
+xlab = "Age Group",
+main = "Boxplots for result_score")
+
+boxplot(testdf$result_t_score ~ testdf$age_categorical, ylab = "result_t_score",
+xlab = "Age Group",
+main = "Boxplots for result_t_score")
+
+boxplot(testdf$impact_score ~ testdf$age_categorical, ylab = "impact_score",
+xlab = "Age Group",
+main = "Boxplots for impact_score")
+```
+
+```{r}
+obs_rs_40_4160 <- mean(na.omit(subset(testdf, age_categorical == "< 40")$result_score)) - mean(na.omit(subset(testdf, age_categorical == "41-60")$result_score))
+
+obs_rs_40_6180 <- mean(na.omit(subset(testdf, age_categorical == "< 40")$result_score)) - mean(na.omit(subset(testdf, age_categorical == "61-80")$result_score))
+
+obs_rs_40_80 <- mean(na.omit(subset(testdf, age_categorical == "< 40")$result_score)) - mean(na.omit(subset(testdf, age_categorical == "80+")$result_score))
+
+obs_rs_4160_6180 <- mean(na.omit(subset(testdf, age_categorical == "41-60")$result_score)) - mean(na.omit(subset(testdf, age_categorical == "61-80")$result_score))
+
+obs_rs_4160_80 <- mean(na.omit(subset(testdf, age_categorical == "41-60")$result_score)) - mean(na.omit(subset(testdf, age_categorical == "80+")$result_score))
+
+obs_rs_6180_80 <- mean(na.omit(subset(testdf, age_categorical == "61-80")$result_score)) - mean(na.omit(subset(testdf, age_categorical == "80+")$result_score))
+
+```
+
+
+## PERMUTATION TESTS
+#################
+```{r} 
+# PERMUTATION TEST AGE GROUP < 40 VERSUS AGE GROUP 41-60
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "< 40" | age_categorical == "41-60")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_score[index])) - mean(na.omit(subsetCurrent$result_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_40_4160) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_score means < 40 and 41-60 Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_40_4160, min(result)), max(obs_rs_40_4160, max(result))))
+abline(v = obs_rs_40_4160, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_40_4160, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP < 40 VERSUS AGE GROUP 61-80
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "< 40" | age_categorical == "61-80")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_score[index])) - mean(na.omit(subsetCurrent$result_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_40_6180) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_score means < 40 and 61-80 Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_40_6180, min(result)), max(obs_rs_40_6180, max(result))))
+abline(v = obs_rs_40_6180, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_40_6180, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP < 40 VERSUS AGE GROUP 80+
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "< 40" | age_categorical == "80+")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_score[index])) - mean(na.omit(subsetCurrent$result_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_40_80) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_score means < 40 and 80+ Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_40_80, min(result)), max(obs_rs_40_80, max(result))))
+abline(v = obs_rs_40_80, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_40_80, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+
+# PERMUTATION TEST AGE GROUP 41-60 VERSUS AGE GROUP 61-80
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "41-60" | age_categorical == "61-80")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_score[index])) - mean(na.omit(subsetCurrent$result_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_4160_6180) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_score means 41-60 and 61-80 Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_4160_6180, min(result)), max(obs_rs_4160_6180, max(result))))
+abline(v = obs_rs_4160_6180, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_4160_6180, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP 41-60 VERSUS AGE GROUP 80+
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "41-60" | age_categorical == "80+")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_score[index])) - mean(na.omit(subsetCurrent$result_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_4160_80) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_score means 41-60 and 80+ Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_4160_80, min(result)), max(obs_rs_4160_80, max(result))))
+abline(v = obs_rs_4160_80, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_4160_80, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP 61-80 VERSUS AGE GROUP 80+
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "61-80" | age_categorical == "80+")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_score[index])) - mean(na.omit(subsetCurrent$result_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_6180_80) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_score means 61-80 and 80+ Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_6180_80, min(result)), max(obs_rs_6180_80, max(result))))
+abline(v = obs_rs_6180_80, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_6180_80, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+```
+################# (note to self: please increase both sample size and number of samples)
+
+
+## T-TESTS
+```{r}
+n40 <- nrow(subset(testdf, age_categorical == "< 40"))
+n4160 <- nrow(subset(testdf, age_categorical == "41-60"))
+n6180 <- nrow(subset(testdf, age_categorical == "61-80"))
+n80 <- nrow(subset(testdf, age_categorical == "80+"))
+
+
+
+tTest1 <- t.test(
+  sample(subset(testdf, age_categorical == "< 40")$result_score, size = min(n40, n4160), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "41-60")$result_score, size = min(n40, n4160), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest2 <- t.test(
+  sample(subset(testdf, age_categorical == "< 40")$result_score, size = min(n40, n6180), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "61-80")$result_score, size = min(n40, n6180), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest3 <- t.test(
+  sample(subset(testdf, age_categorical == "< 40")$result_score, size = min(n40, n80), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "80+")$result_score, size = min(n40, n80), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest4 <- t.test(
+  sample(subset(testdf, age_categorical == "41-60")$result_score, size = min(n4160, n6180), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "61-80")$result_score, size = min(n4160, n6180), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest5 <- t.test(
+  sample(subset(testdf, age_categorical == "41-60")$result_score, size = min(n4160, n80), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "80+")$result_score, size = min(n4160, n80), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest6 <- t.test(
+  sample(subset(testdf, age_categorical == "61-80")$result_score, size = min(n6180, n80), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "80+")$result_score, size = min(n6180, n80), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTestData <- data.frame("Age Groups" = NA, "95% Confidence Interval" = NA, "P-Value" = NA)
+
+
+
+
+tTestData <-  rbind(tTestData, c("< 40 and 41-60", paste("(", signif(tTest1$conf.int[1], 3), ", ", signif(tTest1$conf.int[2], 3), ")", sep = ""), signif(tTest1$p.value, 4)))
+
+tTestData <-  rbind(tTestData, c("< 40 and 61-80", paste("(", signif(tTest2$conf.int[1], 3), ", ", signif(tTest2$conf.int[2], 3), ")", sep = ""), signif(tTest2$p.value, 4)))
+
+tTestData <-  rbind(tTestData, c("< 40 and 80+", paste("(", signif(tTest3$conf.int[1], 3), ", ", signif(tTest3$conf.int[2], 3), ")", sep = ""), signif(tTest3$p.value, 4)))
+
+tTestData <-  rbind(tTestData, c("41-60 and 61-80", paste("(", signif(tTest4$conf.int[1], 3), ", ", signif(tTest4$conf.int[2], 3), ")", sep = ""), signif(tTest4$p.value, 4)))
+
+tTestData <-  rbind(tTestData, c("41-60 and 80+", paste("(", signif(tTest5$conf.int[1], 3), ", ", signif(tTest5$conf.int[2], 3), ")", sep = ""), signif(tTest5$p.value, 4)))
+
+tTestData <-  rbind(tTestData, c("61-80 and 80+", paste("(", signif(tTest6$conf.int[1], 3), ", ", signif(tTest6$conf.int[2], 3), ")", sep = ""), signif(tTest6$p.value, 4)))
+
+
+
+
+tTestData <- tTestData[-1, ]
+colnames(tTestData) <- c("Age Group (Difference in Means)", "95% Confidence Interval for difference in result_score", "P-Value for t-test")
+
+View(tTestData)
+```
+
+
+###########CHI-SQUARED PERMUTATION DISTRIBUTIONS
+```{r}
+# Testing whether age group and result_score are independent
+# (Caps lock is cruise control for cool)
+
+observed <- chisq.test(testdf$result_score, testdf$age_categorical)$statistic
+N <- 10^2 - 1
+result <- numeric(N)
+for (i in 1:N) {
+  result[i] <- chisq.test(xtabs(~sample(testdf$result_score) + testdf$age_categorical))
+}
+head(result)
+
+pValue <- (sum(result >= observed) + 1)/(N + 1) # returns the p-value
+
+hist(as.numeric(result), col = "gray", main = "Permutation distribution for Chi-Squared Test of Independence (age and result_score)", xlab = paste("p-value ", pValue, sep = ""), breaks = 40, xlim = c(min(observed, min(as.numeric(result))), max(observed, max(as.numeric(result)))))
+abline(v = observed, col = "blue", lwd = 2)
+
+
+```
+
+##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE##### SAME THING BUT FOR RESULT-T-SCORE
+
+```{r}
+obs_rs_40_4160 <- mean(na.omit(subset(testdf, age_categorical == "< 40")$result_t_score)) - mean(na.omit(subset(testdf, age_categorical == "41-60")$result_t_score))
+
+obs_rs_40_6180 <- mean(na.omit(subset(testdf, age_categorical == "< 40")$result_t_score)) - mean(na.omit(subset(testdf, age_categorical == "61-80")$result_t_score))
+
+obs_rs_40_80 <- mean(na.omit(subset(testdf, age_categorical == "< 40")$result_t_score)) - mean(na.omit(subset(testdf, age_categorical == "80+")$result_t_score))
+
+obs_rs_4160_6180 <- mean(na.omit(subset(testdf, age_categorical == "41-60")$result_t_score)) - mean(na.omit(subset(testdf, age_categorical == "61-80")$result_t_score))
+
+obs_rs_4160_80 <- mean(na.omit(subset(testdf, age_categorical == "41-60")$result_t_score)) - mean(na.omit(subset(testdf, age_categorical == "80+")$result_t_score))
+
+obs_rs_6180_80 <- mean(na.omit(subset(testdf, age_categorical == "61-80")$result_t_score)) - mean(na.omit(subset(testdf, age_categorical == "80+")$result_t_score))
+
+```
+
+
+## PERMUTATION TESTS
+#################
+```{r} 
+# PERMUTATION TEST AGE GROUP < 40 VERSUS AGE GROUP 41-60
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "< 40" | age_categorical == "41-60")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_t_score[index])) - mean(na.omit(subsetCurrent$result_t_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_40_4160) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_t_score means < 40 and 41-60 Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_40_4160, min(result)), max(obs_rs_40_4160, max(result))))
+abline(v = obs_rs_40_4160, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_40_4160, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP < 40 VERSUS AGE GROUP 61-80
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "< 40" | age_categorical == "61-80")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_t_score[index])) - mean(na.omit(subsetCurrent$result_t_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_40_6180) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_t_score means < 40 and 61-80 Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_40_6180, min(result)), max(obs_rs_40_6180, max(result))))
+abline(v = obs_rs_40_6180, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_40_6180, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP < 40 VERSUS AGE GROUP 80+
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "< 40" | age_categorical == "80+")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_t_score[index])) - mean(na.omit(subsetCurrent$result_t_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_40_80) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_t_score means < 40 and 80+ Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_40_80, min(result)), max(obs_rs_40_80, max(result))))
+abline(v = obs_rs_40_80, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_40_80, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+
+# PERMUTATION TEST AGE GROUP 41-60 VERSUS AGE GROUP 61-80
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "41-60" | age_categorical == "61-80")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_t_score[index])) - mean(na.omit(subsetCurrent$result_t_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_4160_6180) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_t_score means 41-60 and 61-80 Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_4160_6180, min(result)), max(obs_rs_4160_6180, max(result))))
+abline(v = obs_rs_4160_6180, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_4160_6180, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP 41-60 VERSUS AGE GROUP 80+
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "41-60" | age_categorical == "80+")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_t_score[index])) - mean(na.omit(subsetCurrent$result_t_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_4160_80) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_t_score means 41-60 and 80+ Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_4160_80, min(result)), max(obs_rs_4160_80, max(result))))
+abline(v = obs_rs_4160_80, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_4160_80, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP 61-80 VERSUS AGE GROUP 80+
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "61-80" | age_categorical == "80+")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$result_t_score[index])) - mean(na.omit(subsetCurrent$result_t_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_6180_80) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in result_t_score means 61-80 and 80+ Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_6180_80, min(result)), max(obs_rs_6180_80, max(result))))
+abline(v = obs_rs_6180_80, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_6180_80, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+```
+################# (note to self: please increase both sample size and number of samples)
+
+
+## T-TESTS
+```{r}
+n40 <- nrow(subset(testdf, age_categorical == "< 40"))
+n4160 <- nrow(subset(testdf, age_categorical == "41-60"))
+n6180 <- nrow(subset(testdf, age_categorical == "61-80"))
+n80 <- nrow(subset(testdf, age_categorical == "80+"))
+
+
+
+tTest1 <- t.test(
+  sample(subset(testdf, age_categorical == "< 40")$result_t_score, size = min(n40, n4160), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "41-60")$result_t_score, size = min(n40, n4160), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest2 <- t.test(
+  sample(subset(testdf, age_categorical == "< 40")$result_t_score, size = min(n40, n6180), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "61-80")$result_t_score, size = min(n40, n6180), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest3 <- t.test(
+  sample(subset(testdf, age_categorical == "< 40")$result_t_score, size = min(n40, n80), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "80+")$result_t_score, size = min(n40, n80), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest4 <- t.test(
+  sample(subset(testdf, age_categorical == "41-60")$result_t_score, size = min(n4160, n6180), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "61-80")$result_t_score, size = min(n4160, n6180), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest5 <- t.test(
+  sample(subset(testdf, age_categorical == "41-60")$result_t_score, size = min(n4160, n80), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "80+")$result_t_score, size = min(n4160, n80), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest6 <- t.test(
+  sample(subset(testdf, age_categorical == "61-80")$result_t_score, size = min(n6180, n80), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "80+")$result_t_score, size = min(n6180, n80), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTestData2 <- data.frame("Age Groups" = NA, "95% Confidence Interval" = NA, "P-Value" = NA)
+
+
+
+
+tTestData2 <-  rbind(tTestData2, c("< 40 and 41-60", paste("(", signif(tTest1$conf.int[1], 3), ", ", signif(tTest1$conf.int[2], 3), ")", sep = ""), signif(tTest1$p.value, 4)))
+
+tTestData2 <-  rbind(tTestData2, c("< 40 and 61-80", paste("(", signif(tTest2$conf.int[1], 3), ", ", signif(tTest2$conf.int[2], 3), ")", sep = ""), signif(tTest2$p.value, 4)))
+
+tTestData2 <-  rbind(tTestData2, c("< 40 and 80+", paste("(", signif(tTest3$conf.int[1], 3), ", ", signif(tTest3$conf.int[2], 3), ")", sep = ""), signif(tTest3$p.value, 4)))
+
+tTestData2 <-  rbind(tTestData2, c("41-60 and 61-80", paste("(", signif(tTest4$conf.int[1], 3), ", ", signif(tTest4$conf.int[2], 3), ")", sep = ""), signif(tTest4$p.value, 4)))
+
+tTestData2 <-  rbind(tTestData2, c("41-60 and 80+", paste("(", signif(tTest5$conf.int[1], 3), ", ", signif(tTest5$conf.int[2], 3), ")", sep = ""), signif(tTest5$p.value, 4)))
+
+tTestData2 <-  rbind(tTestData2, c("61-80 and 80+", paste("(", signif(tTest6$conf.int[1], 3), ", ", signif(tTest6$conf.int[2], 3), ")", sep = ""), signif(tTest6$p.value, 4)))
+
+
+
+
+tTestData2 <- tTestData2[-1, ]
+colnames(tTestData2) <- c("Age Group (Difference in Means)", "95% Confidence Interval for difference in result_t_score", "P-Value for t-test")
+
+View(tTestData2)
+```
+
+
+###########CHI-SQUARED PERMUTATION DISTRIBUTIONS
+```{r}
+# Testing whether age group and result_t_score are independent
+# (Caps lock is cruise control for cool)
+
+observed <- chisq.test(testdf$result_t_score, testdf$age_categorical)$statistic
+N <- 10^2 - 1
+result <- numeric(N)
+for (i in 1:N) {
+  result[i] <- chisq.test(xtabs(~sample(testdf$result_t_score) + testdf$age_categorical))
+}
+head(result)
+
+pValue <- (sum(result >= observed) + 1)/(N + 1) # returns the p-value
+
+hist(as.numeric(result), col = "gray", main = "Permutation distribution for Chi-Squared Test of Independence (age and result_t_score)", xlab = paste("p-value ", pValue, sep = ""), breaks = 40, xlim = c(min(observed, min(as.numeric(result))), max(observed, max(as.numeric(result)))))
+abline(v = observed, col = "blue", lwd = 2)
+
+
+```
+
+
+####### SAME THING BUT FOR IMPACT_SCORE####### SAME THING BUT FOR IMPACT_SCORE####### SAME THING BUT FOR IMPACT_SCORE####### SAME THING BUT FOR IMPACT_SCORE####### SAME THING BUT FOR IMPACT_SCORE####### SAME THING BUT FOR IMPACT_SCORE####### SAME THING BUT FOR IMPACT_SCORE####### SAME THING BUT FOR IMPACT_SCORE
+
+```{r}
+obs_rs_40_4160 <- mean(na.omit(subset(testdf, age_categorical == "< 40")$impact_score)) - mean(na.omit(subset(testdf, age_categorical == "41-60")$impact_score))
+
+obs_rs_40_6180 <- mean(na.omit(subset(testdf, age_categorical == "< 40")$impact_score)) - mean(na.omit(subset(testdf, age_categorical == "61-80")$impact_score))
+
+obs_rs_40_80 <- mean(na.omit(subset(testdf, age_categorical == "< 40")$impact_score)) - mean(na.omit(subset(testdf, age_categorical == "80+")$impact_score))
+
+obs_rs_4160_6180 <- mean(na.omit(subset(testdf, age_categorical == "41-60")$impact_score)) - mean(na.omit(subset(testdf, age_categorical == "61-80")$impact_score))
+
+obs_rs_4160_80 <- mean(na.omit(subset(testdf, age_categorical == "41-60")$impact_score)) - mean(na.omit(subset(testdf, age_categorical == "80+")$impact_score))
+
+obs_rs_6180_80 <- mean(na.omit(subset(testdf, age_categorical == "61-80")$impact_score)) - mean(na.omit(subset(testdf, age_categorical == "80+")$impact_score))
+
+```
+
+
+## PERMUTATION TESTS
+#################
+```{r} 
+# PERMUTATION TEST AGE GROUP < 40 VERSUS AGE GROUP 41-60
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "< 40" | age_categorical == "41-60")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$impact_score[index])) - mean(na.omit(subsetCurrent$impact_score[-index]))
+}
+head(result)
+
+pValue = (sum(result <= obs_rs_40_4160) + 1) / (N + 1) # This should return the p-value.  <= because impact_score is weird.  
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in impact_score means < 40 and 41-60 Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(obs_rs_40_4160, min(result)), max(-obs_rs_40_4160, max(result))))
+abline(v = obs_rs_40_4160, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_40_4160, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP < 40 VERSUS AGE GROUP 61-80
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "< 40" | age_categorical == "61-80")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$impact_score[index])) - mean(na.omit(subsetCurrent$impact_score[-index]))
+}
+head(result)
+
+pValue = (sum(result <= obs_rs_40_6180) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in impact_score means < 40 and 61-80 Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(obs_rs_40_6180, min(result)), max(-obs_rs_40_6180, max(result))))
+abline(v = obs_rs_40_6180, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_40_6180, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP < 40 VERSUS AGE GROUP 80+
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "< 40" | age_categorical == "80+")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$impact_score[index])) - mean(na.omit(subsetCurrent$impact_score[-index]))
+}
+head(result)
+
+pValue = (sum(result <= obs_rs_40_80) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in impact_score means < 40 and 80+ Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(obs_rs_40_80, min(result)), max(-obs_rs_40_80, max(result))))
+abline(v = obs_rs_40_80, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_40_80, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+
+# PERMUTATION TEST AGE GROUP 41-60 VERSUS AGE GROUP 61-80
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "41-60" | age_categorical == "61-80")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$impact_score[index])) - mean(na.omit(subsetCurrent$impact_score[-index]))
+}
+head(result)
+
+pValue = (sum(result >= obs_rs_4160_6180) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in impact_score means 41-60 and 61-80 Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(-obs_rs_4160_6180, min(result)), max(obs_rs_4160_6180, max(result))))
+abline(v = obs_rs_4160_6180, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_4160_6180, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP 41-60 VERSUS AGE GROUP 80+
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "41-60" | age_categorical == "80+")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$impact_score[index])) - mean(na.omit(subsetCurrent$impact_score[-index]))
+}
+head(result)
+
+pValue = (sum(result <= obs_rs_4160_80) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in impact_score means 41-60 and 80+ Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(obs_rs_4160_80, min(result)), max(-obs_rs_4160_80, max(result)))) # Signs are flipped because again, impact_score is weird.  
+abline(v = obs_rs_4160_80, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_4160_80, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+
+
+# PERMUTATION TEST AGE GROUP 61-80 VERSUS AGE GROUP 80+
+N <- 10^3 - 1
+result <- numeric(N)
+subsetCurrent <- subset(testdf, age_categorical == "61-80" | age_categorical == "80+")  
+# Change this line as needed for different tests.  
+
+for(i in 1:N) {
+  index <- sample(nrow(subsetCurrent), size = 1000, replace = FALSE)
+  result[i] <- mean(na.omit(subsetCurrent$impact_score[index])) - mean(na.omit(subsetCurrent$impact_score[-index]))
+}
+head(result)
+
+pValue = (sum(result <= obs_rs_6180_80) + 1) / (N + 1) # This should return the p-value
+
+hist(result, col = "gray", breaks = 40, main = "Permutation distribution for difference in impact_score means 61-80 and 80+ Age Groups", xlab = paste("p-value ", pValue, sep = ""), xlim = c(min(obs_rs_6180_80, min(result)), max(-obs_rs_6180_80, max(result))))
+abline(v = obs_rs_6180_80, col = "red", lwd = 2) # This code generates red lines that should represent
+abline(v = -obs_rs_6180_80, col = "red", lwd = 2) # the observed difference between the two age groups.
+
+
+```
+################# (note to self: please increase both sample size and number of samples)
+
+
+## T-TESTS
+```{r}
+n40 <- nrow(subset(testdf, age_categorical == "< 40"))
+n4160 <- nrow(subset(testdf, age_categorical == "41-60"))
+n6180 <- nrow(subset(testdf, age_categorical == "61-80"))
+n80 <- nrow(subset(testdf, age_categorical == "80+"))
+
+
+
+tTest1 <- t.test(
+  sample(subset(testdf, age_categorical == "< 40")$impact_score, size = min(n40, n4160), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "41-60")$impact_score, size = min(n40, n4160), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest2 <- t.test(
+  sample(subset(testdf, age_categorical == "< 40")$impact_score, size = min(n40, n6180), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "61-80")$impact_score, size = min(n40, n6180), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest3 <- t.test(
+  sample(subset(testdf, age_categorical == "< 40")$impact_score, size = min(n40, n80), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "80+")$impact_score, size = min(n40, n80), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest4 <- t.test(
+  sample(subset(testdf, age_categorical == "41-60")$impact_score, size = min(n4160, n6180), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "61-80")$impact_score, size = min(n4160, n6180), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest5 <- t.test(
+  sample(subset(testdf, age_categorical == "41-60")$impact_score, size = min(n4160, n80), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "80+")$impact_score, size = min(n4160, n80), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTest6 <- t.test(
+  sample(subset(testdf, age_categorical == "61-80")$impact_score, size = min(n6180, n80), replace = FALSE), 
+  sample(subset(testdf, age_categorical == "80+")$impact_score, size = min(n6180, n80), replace = FALSE), 
+  paired = TRUE
+       )
+
+tTestData3 <- data.frame("Age Groups" = NA, "95% Confidence Interval" = NA, "P-Value" = NA)
+
+
+
+
+tTestData3 <-  rbind(tTestData3, c("< 40 and 41-60", paste("(", signif(tTest1$conf.int[1], 3), ", ", signif(tTest1$conf.int[2], 3), ")", sep = ""), signif(tTest1$p.value, 4)))
+
+tTestData3 <-  rbind(tTestData3, c("< 40 and 61-80", paste("(", signif(tTest2$conf.int[1], 3), ", ", signif(tTest2$conf.int[2], 3), ")", sep = ""), signif(tTest2$p.value, 4)))
+
+tTestData3 <-  rbind(tTestData3, c("< 40 and 80+", paste("(", signif(tTest3$conf.int[1], 3), ", ", signif(tTest3$conf.int[2], 3), ")", sep = ""), signif(tTest3$p.value, 4)))
+
+tTestData3 <-  rbind(tTestData3, c("41-60 and 61-80", paste("(", signif(tTest4$conf.int[1], 3), ", ", signif(tTest4$conf.int[2], 3), ")", sep = ""), signif(tTest4$p.value, 4)))
+
+tTestData3 <-  rbind(tTestData3, c("41-60 and 80+", paste("(", signif(tTest5$conf.int[1], 3), ", ", signif(tTest5$conf.int[2], 3), ")", sep = ""), signif(tTest5$p.value, 4)))
+
+tTestData3 <-  rbind(tTestData3, c("61-80 and 80+", paste("(", signif(tTest6$conf.int[1], 3), ", ", signif(tTest6$conf.int[2], 3), ")", sep = ""), signif(tTest6$p.value, 4)))
+
+
+
+
+tTestData3 <- tTestData3[-1, ]
+colnames(tTestData3) <- c("Age Group (Difference in Means)", "95% Confidence Interval for difference in impact_score", "P-Value for t-test")
+
+View(tTestData3)
+```
+
+
+###########CHI-SQUARED PERMUTATION DISTRIBUTIONS
+```{r}
+# Testing whether age group and impact_score are independent
+# (Caps lock is cruise control for cool)
+
+observed <- chisq.test(testdf$impact_score, testdf$age_categorical)$statistic
+N <- 10^2 - 1
+result <- numeric(N)
+for (i in 1:N) {
+  result[i] <- chisq.test(xtabs(~sample(testdf$impact_score) + testdf$age_categorical))
+}
+head(result)
+
+pValue <- (sum(result >= observed) + 1)/(N + 1) # returns the p-value
+
+hist(as.numeric(result), col = "gray", main = "Permutation distribution for Chi-Squared Test of Independence (age and impact_score)", xlab = paste("p-value ", pValue, sep = ""), breaks = 40, xlim = c(min(observed, min(as.numeric(result))), max(observed, max(as.numeric(result)))))
+abline(v = observed, col = "blue", lwd = 2)
+
+
+```
+
+
+```{r}
+write_csv(tTestData, "C:/Users/gladi/Desktop/t-test_result_score.csv")
+
+write_csv(tTestData2, "C:/Users/gladi/Desktop/t-test_result_t_score.csv")
+
+write_csv(tTestData3, "C:/Users/gladi/Desktop/t-test_impact_score.csv")
+
+
+```
+
+```{r}
+colnames(tTestData) <- c("Age Group (Difference in Means)", "95% Confidence Interval for difference in mean result_score", "P-Value for t-test")
+
+colnames(tTestData2) <- c("Age Group (Difference in Means)", "95% Confidence Interval for difference in mean result_t_score", "P-Value for t-test")
+
+colnames(tTestData3) <- c("Age Group (Difference in Means)", "95% Confidence Interval for difference in mean impact_score", "P-Value for t-test")
+
+```
+
+
+
+### Revised version of the t-tests.  Do it for each Promis Instrument.  
+
+```{r}
+theCurrentName <- unique(testdf$instrument_name)[8]
+testdfTemp <- subset(testdf, instrument_name == theCurrentName)
+
+
+n40 <- nrow(subset(testdfTemp, age_categorical == "< 40"))
+n4160 <- nrow(subset(testdfTemp, age_categorical == "41-60"))
+n6180 <- nrow(subset(testdfTemp, age_categorical == "61-80"))
+n80 <- nrow(subset(testdfTemp, age_categorical == "80+"))
+tTest1 <- t.test(
+  sample(subset(testdfTemp, age_categorical == "< 40")$result_t_score, size = min(n40, n4160), replace = FALSE), 
+  sample(subset(testdfTemp, age_categorical == "41-60")$result_t_score, size = min(n40, n4160), replace = FALSE), 
+  paired = TRUE
+       )
+tTest2 <- t.test(
+  sample(subset(testdfTemp, age_categorical == "< 40")$result_t_score, size = min(n40, n6180), replace = FALSE), 
+  sample(subset(testdfTemp, age_categorical == "61-80")$result_t_score, size = min(n40, n6180), replace = FALSE), 
+  paired = TRUE
+       )
+tTest3 <- t.test(
+  sample(subset(testdfTemp, age_categorical == "< 40")$result_t_score, size = min(n40, n80), replace = FALSE), 
+  sample(subset(testdfTemp, age_categorical == "80+")$result_t_score, size = min(n40, n80), replace = FALSE), 
+  paired = TRUE
+       )
+tTest4 <- t.test(
+  sample(subset(testdfTemp, age_categorical == "41-60")$result_t_score, size = min(n4160, n6180), replace = FALSE),
+  sample(subset(testdfTemp, age_categorical == "61-80")$result_t_score, size = min(n4160, n6180), replace = FALSE),
+  paired = TRUE
+       )
+tTest5 <- t.test(
+  sample(subset(testdfTemp, age_categorical == "41-60")$result_t_score, size = min(n4160, n80), replace = FALSE), 
+  sample(subset(testdfTemp, age_categorical == "80+")$result_t_score, size = min(n4160, n80), replace = FALSE), 
+  paired = TRUE
+       )
+tTest6 <- t.test(
+  sample(subset(testdfTemp, age_categorical == "61-80")$result_t_score, size = min(n6180, n80), replace = FALSE), 
+  sample(subset(testdfTemp, age_categorical == "80+")$result_t_score, size = min(n6180, n80), replace = FALSE), 
+  paired = TRUE
+       )
+tTestData3 <- data.frame("Age Groups" = NA, "95% Confidence Interval" = NA, "P-Value" = NA)
+tTestData3 <-  rbind(tTestData3, c("< 40 and 41-60           ", paste("(", signif(tTest1$conf.int[1], 3), ", ", signif(tTest1$conf.int[2], 3), ")", sep = ""), signif(tTest1$p.value, 4)))
+tTestData3 <-  rbind(tTestData3, c("< 40 and 61-80", paste("(", signif(tTest2$conf.int[1], 3), ", ", signif(tTest2$conf.int[2], 3), ")", sep = ""), signif(tTest2$p.value, 4)))
+tTestData3 <-  rbind(tTestData3, c("< 40 and 80+", paste("(", signif(tTest3$conf.int[1], 3), ", ", signif(tTest3$conf.int[2], 3), ")", sep = ""), signif(tTest3$p.value, 4)))
+tTestData3 <-  rbind(tTestData3, c("41-60 and 61-80", paste("(", signif(tTest4$conf.int[1], 3), ", ", signif(tTest4$conf.int[2], 3), ")", sep = ""), signif(tTest4$p.value, 4)))
+tTestData3 <-  rbind(tTestData3, c("41-60 and 80+", paste("(", signif(tTest5$conf.int[1], 3), ", ", signif(tTest5$conf.int[2], 3), ")", sep = ""), signif(tTest5$p.value, 4)))
+tTestData3 <-  rbind(tTestData3, c("61-80 and 80+", paste("(", signif(tTest6$conf.int[1], 3), ", ", signif(tTest6$conf.int[2], 3), ")", sep = ""), signif(tTest6$p.value, 4)))
+tTestData3 <- tTestData3[-1, ]
+colnames(tTestData3) <- c(paste("", theCurrentName), "95% C.I. mean result_t_score difference", "P-Value for t-test")
+write_csv(tTestData3, "C:/Users/gladi/Desktop/tempCeleriHealthFolder/PROMIS_SF_v1.0-Physical_Function_4a_result_t_score.csv")
+View(tTestData3)
+
+```
+
+[1]_"PROMIS_SF_v1.0-Sleep_Disturbance_4a"_______________"PROMIS_SF_v1.0-Anxiety_4a"________________________
+[3]_"PROMIS-Global_Pain"________________________________"PROMIS_SF_v1.0-Fatigue_4a"________________________
+[5]_"PROMIS_SF_v2.0_-_Ability_to_Participate_Social_4a"_"PROMIS_SF_v1.0-Depression_4a"_____________________
+[7]_"PROMIS_SF_v1.0-Pain_Interference_4a"_______________"PROMIS_SF_v1.0-Physical_Function_4a"_
+
+
+
+
+####################T TESTING AGAIN, BETWEEN GENDERS
+####################T TESTING AGAIN, BETWEEN GENDERS
+####################T TESTING AGAIN, BETWEEN GENDERS
+```{r}
+# Testing the t-test things between genders now, instead of just among instruments
+testdfMale <- subset(testdf, patient_gender == "male")
+testdfFemale <- subset(testdf, patient_gender == "female")
+
+n40Male <- nrow(subset(testdfMale, age_categorical == "< 40"))
+n4160Male <- nrow(subset(testdfMale, age_categorical == "41-60"))
+n6180Male <- nrow(subset(testdfMale, age_categorical == "61-80"))
+n80Male <- nrow(subset(testdfMale, age_categorical == "80+"))
+
+n40Female <- nrow(subset(testdfFemale, age_categorical == "< 40"))
+n4160Female <- nrow(subset(testdfFemale, age_categorical == "41-60"))
+n6180Female <- nrow(subset(testdfFemale, age_categorical == "61-80"))
+n80Female <- nrow(subset(testdfFemale, age_categorical == "80+"))
+
+tTest1 <- t.test(
+  sample(subset(testdfMale, age_categorical == "< 40")$result_score, size = min(n40Male, n40Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "< 40")$result_score, size = min(n40Male, n40Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest2 <- t.test(
+  sample(subset(testdfMale, age_categorical == "41-60")$result_score, size = min(n4160Male, n4160Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "41-60")$result_score, size = min(n4160Male, n4160Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest3 <- t.test(
+  sample(subset(testdfMale, age_categorical == "61-80")$result_score, size = min(n6180Male, n6180Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "61-80")$result_score, size = min(n6180Male, n6180Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest4 <- t.test(
+  sample(subset(testdfMale, age_categorical == "80+")$result_score, size = min(n80Male, n80Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "80+")$result_score, size = min(n80Male, n80Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest5 <- t.test(
+  sample(testdfMale$result_score, size = min(nrow(testdfMale), nrow(testdfFemale)), replace = FALSE), 
+  sample(testdfFemale$result_score, size = min(nrow(testdfMale), nrow(testdfFemale)), replace = FALSE), 
+  paired = TRUE
+)
+
+
+
+tTestData3 <- data.frame("Age Groups" = NA, "95% C.I. between Genders" = NA, "P-Value" = NA)
+
+tTestData3 <-  rbind(tTestData3, c("< 40", paste("(", signif(tTest1$conf.int[1], 3), ", ", signif(tTest1$conf.int[2], 3), ")", sep = ""), signif(tTest1$p.value, 4)))
+
+tTestData3 <-  rbind(tTestData3, c("41-60", paste("(", signif(tTest2$conf.int[1], 3), ", ", signif(tTest2$conf.int[2], 3), ")", sep = ""), signif(tTest2$p.value, 4)))
+
+tTestData3 <-  rbind(tTestData3, c("61-80", paste("(", signif(tTest3$conf.int[1], 3), ", ", signif(tTest3$conf.int[2], 3), ")", sep = ""), signif(tTest3$p.value, 4)))
+
+tTestData3 <-  rbind(tTestData3, c("80+", paste("(", signif(tTest4$conf.int[1], 3), ", ", signif(tTest4$conf.int[2], 3), ")", sep = ""), signif(tTest4$p.value, 4)))
+
+tTestData3 <-  rbind(tTestData3, c("all ages", paste("(", signif(tTest5$conf.int[1], 3), ", ", signif(tTest5$conf.int[2], 3), ")", sep = ""), signif(tTest5$p.value, 4)))
+
+tTestData3 <- tTestData3[-1, ]
+
+colnames(tTestData3) <- c(paste("", 'age group'), "95% C.I. mean result_score difference between genders", "P-Value for t-test")
+
+#write_csv(tTestData3, "C:/Users/gladi/Desktop/tempCeleriHealthFolder/PROMIS_SF_v1.0-Physical_Function_4a_result_t_score.csv")
+
+View(tTestData3)
+
+```
+
+
+```{r}
+m40 <- subset(testdfMale, age_categorical == "< 40")
+m4160 <- subset(testdfMale, age_categorical == "41-60")
+m6180 <- subset(testdfMale, age_categorical == "61-80")
+m80 <- subset(testdfMale, age_categorical == "80+")
+
+f40 <- subset(testdfFemale, age_categorical == "< 40")
+f4160 <- subset(testdfFemale, age_categorical == "41-60")
+f6180 <- subset(testdfFemale, age_categorical == "61-80")
+f80 <- subset(testdfFemale, age_categorical == "80+")
+
+df <- data.frame(age = character(),
+                 mean = double(), 
+                 sd = double(),
+                 stringsAsFactors=FALSE)
+df <- c()
+
+df <- rbind(df, c("< 40", 
+                  mean(m40$result_score) - mean(f40$result_score), 
+                  sqrt(( ( sd(m40$result_score)*sd(m40$result_score) )/nrow(m40) ) + ( ( sd(f40$result_score)*sd(f40$result_score) )/nrow(f40) ))
+            ))
+
+df <- rbind(df, c("41-60", 
+                  mean(m4160$result_score) - mean(f4160$result_score), 
+                  sqrt(( ( sd(m4160$result_score)*sd(m4160$result_score) )/nrow(m4160) ) + ( ( sd(f4160$result_score)*sd(f4160$result_score) )/nrow(f4160) ))
+            ))
+
+df <- rbind(df, c("61-80", 
+                  mean(m6180$result_score) - mean(f6180$result_score), 
+                  sqrt(( ( sd(m6180$result_score)*sd(m6180$result_score) )/nrow(m6180) ) + ( ( sd(f6180$result_score)*sd(f6180$result_score) )/nrow(f6180) ))
+            ))
+
+df <- rbind(df, c("80+", 
+                  mean(m80$result_score) - mean(f80$result_score), 
+                  sqrt(( ( sd(m80$result_score)*sd(m80$result_score) )/nrow(m80) ) + ( ( sd(f80$result_score)*sd(f80$result_score) )/nrow(f80) ))
+            ))
+
+# now all ages are included
+df <- rbind(df, c("all ages", 
+                  mean(testdfMale$result_score) - mean(testdfFemale$result_score), 
+                  sqrt(( ( sd(testdfMale$result_score)*sd(testdfMale$result_score) )/nrow(testdfMale) ) + ( ( sd(testdfFemale$result_score)*sd(testdfFemale$result_score) )/nrow(testdfFemale) ))
+            ))
+
+colnames(df) <- c("Age", "Difference_mean", "Standard_Deviation")
+df <- as.data.frame(df)
+df$Age <- as.character(df$Age)
+df$Difference_mean <- as.numeric(as.character(df$Difference_mean))
+df$Standard_Deviation <- as.numeric(as.character(df$Standard_Deviation))
+
+
+ggplot(df, aes(x = Age, Difference_mean)) +
+  geom_errorbar(aes(ymax = Difference_mean + Standard_Deviation, ymin = Difference_mean - Standard_Deviation), width = 0) +
+  geom_point(size = 2) + 
+  theme(panel.background = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.text.x = element_text(angle=80, hjust=1), 
+        text = element_text(size = 10)) + 
+  guides(colour = FALSE) + 
+  xlab("") + ylab("(average male result_score) - (average female result_score)")
+```
+
+```{r}
+# Testing the t-test things between genders now, instead of just among instruments
+testdfMale <- subset(testdf, patient_gender == "male")
+testdfFemale <- subset(testdf, patient_gender == "female")
+
+n40Male <- nrow(subset(testdfMale, age_categorical == "< 40"))
+n4160Male <- nrow(subset(testdfMale, age_categorical == "41-60"))
+n6180Male <- nrow(subset(testdfMale, age_categorical == "61-80"))
+n80Male <- nrow(subset(testdfMale, age_categorical == "80+"))
+
+n40Female <- nrow(subset(testdfFemale, age_categorical == "< 40"))
+n4160Female <- nrow(subset(testdfFemale, age_categorical == "41-60"))
+n6180Female <- nrow(subset(testdfFemale, age_categorical == "61-80"))
+n80Female <- nrow(subset(testdfFemale, age_categorical == "80+"))
+
+tTest1 <- t.test(
+  sample(subset(testdfMale, age_categorical == "< 40")$result_t_score, size = min(n40Male, n40Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "< 40")$result_t_score, size = min(n40Male, n40Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest2 <- t.test(
+  sample(subset(testdfMale, age_categorical == "41-60")$result_t_score, size = min(n4160Male, n4160Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "41-60")$result_t_score, size = min(n4160Male, n4160Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest3 <- t.test(
+  sample(subset(testdfMale, age_categorical == "61-80")$result_t_score, size = min(n6180Male, n6180Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "61-80")$result_t_score, size = min(n6180Male, n6180Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest4 <- t.test(
+  sample(subset(testdfMale, age_categorical == "80+")$result_t_score, size = min(n80Male, n80Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "80+")$result_t_score, size = min(n80Male, n80Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest5 <- t.test(
+  sample(testdfMale$result_t_score, size = min(nrow(testdfMale), nrow(testdfFemale)), replace = FALSE), 
+  sample(testdfFemale$result_t_score, size = min(nrow(testdfMale), nrow(testdfFemale)), replace = FALSE), 
+  paired = TRUE
+)
+
+
+
+tTestData_result_t_score <- data.frame("Age Groups" = NA, "95% C.I. between Genders" = NA, "P-Value" = NA)
+
+tTestData_result_t_score <-  rbind(tTestData_result_t_score, c("< 40", paste("(", signif(tTest1$conf.int[1], 3), ", ", signif(tTest1$conf.int[2], 3), ")", sep = ""), signif(tTest1$p.value, 4)))
+
+tTestData_result_t_score <-  rbind(tTestData_result_t_score, c("41-60", paste("(", signif(tTest2$conf.int[1], 3), ", ", signif(tTest2$conf.int[2], 3), ")", sep = ""), signif(tTest2$p.value, 4)))
+
+tTestData_result_t_score <-  rbind(tTestData_result_t_score, c("61-80", paste("(", signif(tTest3$conf.int[1], 3), ", ", signif(tTest3$conf.int[2], 3), ")", sep = ""), signif(tTest3$p.value, 4)))
+
+tTestData_result_t_score <-  rbind(tTestData_result_t_score, c("80+", paste("(", signif(tTest4$conf.int[1], 3), ", ", signif(tTest4$conf.int[2], 3), ")", sep = ""), signif(tTest4$p.value, 4)))
+
+tTestData_result_t_score <-  rbind(tTestData_result_t_score, c("all ages", paste("(", signif(tTest5$conf.int[1], 3), ", ", signif(tTest5$conf.int[2], 3), ")", sep = ""), signif(tTest5$p.value, 4)))
+
+tTestData_result_t_score <- tTestData_result_t_score[-1, ]
+
+colnames(tTestData_result_t_score) <- c(paste("", 'age group'), "95% C.I. mean result_t_score difference between genders", "P-Value for t-test")
+
+#write_csv(tTestData_result_t_score, "C:/Users/gladi/Desktop/tempCeleriHealthFolder/PROMIS_SF_v1.0-Physical_Function_4a_result_t_score.csv")
+
+View(tTestData_result_t_score)
+
+```
+
+
+```{r}
+m40 <- subset(testdfMale, age_categorical == "< 40")
+m40 <- m40[!is.na(m40$result_t_score), ]
+
+m4160 <- subset(testdfMale, age_categorical == "41-60")
+m4160 <- m4160[!is.na(m4160$result_t_score), ]
+
+m6180 <- subset(testdfMale, age_categorical == "61-80")
+m6180 <- m6180[!is.na(m6180$result_t_score), ]
+
+m80 <- subset(testdfMale, age_categorical == "80+")
+m80 <- m80[!is.na(m80$result_t_score), ]
+
+f40 <- subset(testdfFemale, age_categorical == "< 40")
+f40 <- f40[!is.na(f40$result_t_score), ]
+
+f4160 <- subset(testdfFemale, age_categorical == "41-60")
+f4160 <- f4160[!is.na(f4160$result_t_score), ]
+
+f6180 <- subset(testdfFemale, age_categorical == "61-80")
+f6180 <- f6180[!is.na(f6180$result_t_score), ]
+
+f80 <- subset(testdfFemale, age_categorical == "80+")
+f80 <- f80[!is.na(f80$result_t_score), ]
+
+mAllAges <- testdfMale[!is.na(testdfMale$result_t_score), ]
+fAllAges <- testdfFemale[!is.na(testdfFemale$result_t_score), ]
+
+df <- data.frame(age = character(),
+                 mean = double(), 
+                 sd = double(),
+                 stringsAsFactors=FALSE)
+df <- c()
+
+df <- rbind(df, c("< 40", 
+                  mean(m40$result_t_score) - mean(f40$result_t_score), 
+                  sqrt(( ( sd(m40$result_t_score)*sd(m40$result_t_score) )/nrow(m40) ) + ( ( sd(f40$result_t_score)*sd(f40$result_t_score) )/nrow(f40) ))
+            ))
+
+df <- rbind(df, c("41-60", 
+                  mean(m4160$result_t_score) - mean(f4160$result_t_score), 
+                  sqrt(( ( sd(m4160$result_t_score)*sd(m4160$result_t_score) )/nrow(m4160) ) + ( ( sd(f4160$result_t_score)*sd(f4160$result_t_score) )/nrow(f4160) ))
+            ))
+
+df <- rbind(df, c("61-80", 
+                  mean(m6180$result_t_score) - mean(f6180$result_t_score), 
+                  sqrt(( ( sd(m6180$result_t_score)*sd(m6180$result_t_score) )/nrow(m6180) ) + ( ( sd(f6180$result_t_score)*sd(f6180$result_t_score) )/nrow(f6180) ))
+            ))
+
+df <- rbind(df, c("80+", 
+                  mean(m80$result_t_score) - mean(f80$result_t_score), 
+                  sqrt(( ( sd(m80$result_t_score)*sd(m80$result_t_score) )/nrow(m80) ) + ( ( sd(f80$result_t_score)*sd(f80$result_t_score) )/nrow(f80) ))
+            ))
+
+# now all ages are included
+df <- rbind(df, c("all ages", 
+                  mean(mAllAges$result_t_score) - mean(fAllAges$result_t_score), 
+                  sqrt(( ( sd(mAllAges$result_t_score)*sd(mAllAges$result_t_score) )/nrow(mAllAges) ) + ( ( sd(fAllAges$result_t_score)*sd(fAllAges$result_t_score) )/nrow(fAllAges) ))
+            ))
+
+colnames(df) <- c("Age", "Difference_mean", "Standard_Deviation")
+df <- as.data.frame(df)
+df$Age <- as.character(df$Age)
+df$Difference_mean <- as.numeric(as.character(df$Difference_mean))
+df$Standard_Deviation <- as.numeric(as.character(df$Standard_Deviation))
+
+
+ggplot(df, aes(x = Age, Difference_mean)) +
+  geom_errorbar(aes(ymax = Difference_mean + Standard_Deviation, ymin = Difference_mean - Standard_Deviation), width = 0) +
+  geom_point(size = 2) + 
+  theme(panel.background = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.text.x = element_text(angle=80, hjust=1), 
+        text = element_text(size = 10)) + 
+  guides(colour = FALSE) + 
+  xlab("") + ylab("(average male result_t_score) - (average female result_t_score)")
+```
+
+
+
+```{r}
+# Testing the t-test things between genders now, instead of just among instruments
+testdfMale <- subset(testdf, patient_gender == "male")
+testdfFemale <- subset(testdf, patient_gender == "female")
+
+n40Male <- nrow(subset(testdfMale, age_categorical == "< 40"))
+n4160Male <- nrow(subset(testdfMale, age_categorical == "41-60"))
+n6180Male <- nrow(subset(testdfMale, age_categorical == "61-80"))
+n80Male <- nrow(subset(testdfMale, age_categorical == "80+"))
+
+n40Female <- nrow(subset(testdfFemale, age_categorical == "< 40"))
+n4160Female <- nrow(subset(testdfFemale, age_categorical == "41-60"))
+n6180Female <- nrow(subset(testdfFemale, age_categorical == "61-80"))
+n80Female <- nrow(subset(testdfFemale, age_categorical == "80+"))
+
+tTest1 <- t.test(
+  sample(subset(testdfMale, age_categorical == "< 40")$impact_score, size = min(n40Male, n40Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "< 40")$impact_score, size = min(n40Male, n40Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest2 <- t.test(
+  sample(subset(testdfMale, age_categorical == "41-60")$impact_score, size = min(n4160Male, n4160Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "41-60")$impact_score, size = min(n4160Male, n4160Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest3 <- t.test(
+  sample(subset(testdfMale, age_categorical == "61-80")$impact_score, size = min(n6180Male, n6180Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "61-80")$impact_score, size = min(n6180Male, n6180Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest4 <- t.test(
+  sample(subset(testdfMale, age_categorical == "80+")$impact_score, size = min(n80Male, n80Female), replace = FALSE), 
+  sample(subset(testdfFemale, age_categorical == "80+")$impact_score, size = min(n80Male, n80Female), replace = FALSE), 
+  paired = TRUE
+)
+
+tTest5 <- t.test(
+  sample(testdfMale$impact_score, size = min(nrow(testdfMale), nrow(testdfFemale)), replace = FALSE), 
+  sample(testdfFemale$impact_score, size = min(nrow(testdfMale), nrow(testdfFemale)), replace = FALSE), 
+  paired = TRUE
+)
+
+
+
+tTestData_impact_score <- data.frame("Age Groups" = NA, "95% C.I. between Genders" = NA, "P-Value" = NA)
+
+tTestData_impact_score <-  rbind(tTestData_impact_score, c("< 40", paste("(", signif(tTest1$conf.int[1], 3), ", ", signif(tTest1$conf.int[2], 3), ")", sep = ""), signif(tTest1$p.value, 4)))
+
+tTestData_impact_score <-  rbind(tTestData_impact_score, c("41-60", paste("(", signif(tTest2$conf.int[1], 3), ", ", signif(tTest2$conf.int[2], 3), ")", sep = ""), signif(tTest2$p.value, 4)))
+
+tTestData_impact_score <-  rbind(tTestData_impact_score, c("61-80", paste("(", signif(tTest3$conf.int[1], 3), ", ", signif(tTest3$conf.int[2], 3), ")", sep = ""), signif(tTest3$p.value, 4)))
+
+tTestData_impact_score <-  rbind(tTestData_impact_score, c("80+", paste("(", signif(tTest4$conf.int[1], 3), ", ", signif(tTest4$conf.int[2], 3), ")", sep = ""), signif(tTest4$p.value, 4)))
+
+tTestData_impact_score <-  rbind(tTestData_impact_score, c("all ages", paste("(", signif(tTest5$conf.int[1], 3), ", ", signif(tTest5$conf.int[2], 3), ")", sep = ""), signif(tTest5$p.value, 4)))
+
+tTestData_impact_score <- tTestData_impact_score[-1, ]
+
+colnames(tTestData_impact_score) <- c(paste("", 'age group'), "95% C.I. mean impact_score difference between genders", "P-Value for t-test")
+
+#write_csv(tTestData_impact_score, "C:/Users/gladi/Desktop/tempCeleriHealthFolder/PROMIS_SF_v1.0-Physical_Function_4a_impact_score.csv")
+
+View(tTestData_impact_score)
+
+```
+
+
+```{r}
+m40 <- subset(testdfMale, age_categorical == "< 40")
+m40 <- subset(testdfMale, age_categorical == "< 40")
+m40 <- m40[!is.na(m40$impact_score), ]
+
+m4160 <- subset(testdfMale, age_categorical == "41-60")
+m4160 <- m4160[!is.na(m4160$impact_score), ]
+
+m6180 <- subset(testdfMale, age_categorical == "61-80")
+m6180 <- m6180[!is.na(m6180$impact_score), ]
+
+m80 <- subset(testdfMale, age_categorical == "80+")
+m80 <- m80[!is.na(m80$impact_score), ]
+
+f40 <- subset(testdfFemale, age_categorical == "< 40")
+f40 <- f40[!is.na(f40$impact_score), ]
+
+f4160 <- subset(testdfFemale, age_categorical == "41-60")
+f4160 <- f4160[!is.na(f4160$impact_score), ]
+
+f6180 <- subset(testdfFemale, age_categorical == "61-80")
+f6180 <- f6180[!is.na(f6180$impact_score), ]
+
+f80 <- subset(testdfFemale, age_categorical == "80+")
+f80 <- f80[!is.na(f80$impact_score), ]
+
+mAllAges <- testdfMale[!is.na(testdfMale$impact_score), ]
+fAllAges <- testdfFemale[!is.na(testdfFemale$impact_score), ]
+
+df <- data.frame(age = character(),
+                 mean = double(), 
+                 sd = double(),
+                 stringsAsFactors=FALSE)
+df <- c()
+
+df <- rbind(df, c("< 40", 
+                  mean(m40$impact_score) - mean(f40$impact_score), 
+                  sqrt(( ( sd(m40$impact_score)*sd(m40$impact_score) )/nrow(m40) ) + ( ( sd(f40$impact_score)*sd(f40$impact_score) )/nrow(f40) ))
+            ))
+
+df <- rbind(df, c("41-60", 
+                  mean(m4160$impact_score) - mean(f4160$impact_score), 
+                  sqrt(( ( sd(m4160$impact_score)*sd(m4160$impact_score) )/nrow(m4160) ) + ( ( sd(f4160$impact_score)*sd(f4160$impact_score) )/nrow(f4160) ))
+            ))
+
+df <- rbind(df, c("61-80", 
+                  mean(m6180$impact_score) - mean(f6180$impact_score), 
+                  sqrt(( ( sd(m6180$impact_score)*sd(m6180$impact_score) )/nrow(m6180) ) + ( ( sd(f6180$impact_score)*sd(f6180$impact_score) )/nrow(f6180) ))
+            ))
+
+df <- rbind(df, c("80+", 
+                  mean(m80$impact_score) - mean(f80$impact_score), 
+                  sqrt(( ( sd(m80$impact_score)*sd(m80$impact_score) )/nrow(m80) ) + ( ( sd(f80$impact_score)*sd(f80$impact_score) )/nrow(f80) ))
+            ))
+
+# now all ages are included
+df <- rbind(df, c("all ages", 
+                  mean(mAllAges$impact_score) - mean(fAllAges$impact_score), 
+                  sqrt(( ( sd(mAllAges$impact_score)*sd(mAllAges$impact_score) )/nrow(mAllAges) ) + ( ( sd(fAllAges$impact_score)*sd(fAllAges$impact_score) )/nrow(fAllAges) ))
+            ))
+
+colnames(df) <- c("Age", "Difference_mean", "Standard_Deviation")
+df <- as.data.frame(df)
+df$Age <- as.character(df$Age)
+df$Difference_mean <- as.numeric(as.character(df$Difference_mean))
+df$Standard_Deviation <- as.numeric(as.character(df$Standard_Deviation))
+
+
+ggplot(df, aes(x = Age, Difference_mean)) +
+  geom_errorbar(aes(ymax = Difference_mean + Standard_Deviation, ymin = Difference_mean - Standard_Deviation), width = 0) +
+  geom_point(size = 2) + 
+  theme(panel.background = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.text.x = element_text(angle=80, hjust=1), 
+        text = element_text(size = 10)) + 
+  guides(colour = FALSE) + 
+  xlab("") + ylab("(average male impact_score) - (average female impact_score)")
+```
+
+```{r}
+write_csv(tTestData3, "C:/Users/gladi/Desktop/tempCeleriHealthFolder/genderDifference_result_score.csv")
+write_csv(tTestData_result_t_score, "C:/Users/gladi/Desktop/tempCeleriHealthFolder/genderDifference_result_t_score.csv")
+write_csv(tTestData_impact_score, "C:/Users/gladi/Desktop/tempCeleriHealthFolder/genderDifference_impact_score.csv")
+```
+
+
+##########################################################################################
+#########
+#########
+##########################################The HUI-3 DATASET.  T-TEST AND TRUE DISTRIBUTION.
+#########
+#########
+##########################################################################################
+
+
+```{r}
+# This might require you to install the lmerTest package.  
+stimpact_hui3 <- stimpact_hui3 %>% 
+  mutate(age_categorical = cut(age, c(-45, 39, 60, 80, 120), labels = c("< 40", "41-60", "61-80", "80+")))
+```
+
+```{r}
+hui3_subset = left_join(stimpact_hui3, testdf, by = 'patient_id')
+```
+
+```{r}
+# Creating the table of values
+# The letter indicates the gender and 
+# the number indicates the age category.  
+# That is, m40 indicates only people 
+# who are less than 40.  ############
+############
+######################################################################IMPACT SCORE
+
+hui3_subset_male <- subset(hui3_subset, patient_gender.x == 'male')
+hui3_subset_female <- subset(hui3_subset, patient_gender.x == 'female')
+
+m40 <- subset(hui3_subset_male, age_categorical.x == "< 40")
+m40 <- subset(hui3_subset_male, age_categorical.x == "< 40")
+m40 <- m40[!is.na(m40$impact_score), ]
+
+m4160 <- subset(hui3_subset_male, age_categorical.x == "41-60")
+m4160 <- m4160[!is.na(m4160$impact_score), ]
+
+m6180 <- subset(hui3_subset_male, age_categorical.x == "61-80")
+m6180 <- m6180[!is.na(m6180$impact_score), ]
+
+m80 <- subset(hui3_subset_male, age_categorical.x == "80+")
+m80 <- m80[!is.na(m80$impact_score), ]
+
+f40 <- subset(hui3_subset_female, age_categorical.x == "< 40")
+f40 <- f40[!is.na(f40$impact_score), ]
+
+f4160 <- subset(hui3_subset_female, age_categorical.x == "41-60")
+f4160 <- f4160[!is.na(f4160$impact_score), ]
+
+f6180 <- subset(hui3_subset_female, age_categorical.x == "61-80")
+f6180 <- f6180[!is.na(f6180$impact_score), ]
+
+f80 <- subset(hui3_subset_female, age_categorical.x == "80+")
+f80 <- f80[!is.na(f80$impact_score), ]
+
+mAllAges <- hui3_subset_male[!is.na(hui3_subset_male$impact_score), ]
+fAllAges <- hui3_subset_female[!is.na(hui3_subset_female$impact_score), ]
+
+df <- data.frame(age = character(),
+                 mean = double(), 
+                 sd = double(),
+                 stringsAsFactors=FALSE)
+df <- c()
+
+df <- rbind(df, c("< 40", 
+                  mean(m40$impact_score) - mean(f40$impact_score), 
+                  sqrt(( ( sd(m40$impact_score)*sd(m40$impact_score) )/nrow(m40) ) + ( ( sd(f40$impact_score)*sd(f40$impact_score) )/nrow(f40) ))
+            ))
+
+df <- rbind(df, c("41-60", 
+                  mean(m4160$impact_score) - mean(f4160$impact_score), 
+                  sqrt(( ( sd(m4160$impact_score)*sd(m4160$impact_score) )/nrow(m4160) ) + ( ( sd(f4160$impact_score)*sd(f4160$impact_score) )/nrow(f4160) ))
+            ))
+
+df <- rbind(df, c("61-80", 
+                  mean(m6180$impact_score) - mean(f6180$impact_score), 
+                  sqrt(( ( sd(m6180$impact_score)*sd(m6180$impact_score) )/nrow(m6180) ) + ( ( sd(f6180$impact_score)*sd(f6180$impact_score) )/nrow(f6180) ))
+            ))
+
+df <- rbind(df, c("80+", 
+                  mean(m80$impact_score) - mean(f80$impact_score), 
+                  sqrt(( ( sd(m80$impact_score)*sd(m80$impact_score) )/nrow(m80) ) + ( ( sd(f80$impact_score)*sd(f80$impact_score) )/nrow(f80) ))
+            ))
+
+# now all ages are included
+df <- rbind(df, c("all ages", 
+                  mean(mAllAges$impact_score) - mean(fAllAges$impact_score), 
+                  sqrt(( ( sd(mAllAges$impact_score)*sd(mAllAges$impact_score) )/nrow(mAllAges) ) + ( ( sd(fAllAges$impact_score)*sd(fAllAges$impact_score) )/nrow(fAllAges) ))
+            ))
+
+colnames(df) <- c("Age", "Difference_mean", "Standard_Deviation")
+df <- as.data.frame(df)
+df$Age <- as.character(df$Age)
+df$Difference_mean <- as.numeric(as.character(df$Difference_mean))
+df$Standard_Deviation <- as.numeric(as.character(df$Standard_Deviation))
+
+
+ggplot(df, aes(x = Age, Difference_mean)) +
+  geom_errorbar(aes(ymax = Difference_mean + Standard_Deviation, ymin = Difference_mean - Standard_Deviation), width = 0) +
+  geom_point(size = 2) + 
+  theme(panel.background = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.text.x = element_text(angle=80, hjust=1), 
+        text = element_text(size = 10)) + 
+  guides(colour = FALSE) + 
+  xlab("") + ylab("average male impact_score - average female impact_score") + 
+  ggtitle("HUI-3 subset of PROMIS data, broken down by male and female impact_score")
+
+hui3_subsetTemp <- hui3_subset
+
+n40 <- nrow(subset(hui3_subsetTemp, age_categorical.x == "< 40"))
+n4160 <- nrow(subset(hui3_subsetTemp, age_categorical.x == "41-60"))
+n6180 <- nrow(subset(hui3_subsetTemp, age_categorical.x == "61-80"))
+n80 <- nrow(subset(hui3_subsetTemp, age_categorical.x == "80+"))
+tTest1 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "< 40")$impact_score, size = min(n40, n4160), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "41-60")$impact_score, size = min(n40, n4160), replace = FALSE), 
+  paired = TRUE
+       )
+tTest2 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "< 40")$impact_score, size = min(n40, n6180), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "61-80")$impact_score, size = min(n40, n6180), replace = FALSE), 
+  paired = TRUE
+       )
+tTest3 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "< 40")$impact_score, size = min(n40, n80), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "80+")$impact_score, size = min(n40, n80), replace = FALSE), 
+  paired = TRUE
+       )
+tTest4 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "41-60")$impact_score, size = min(n4160, n6180), replace = FALSE),
+  sample(subset(hui3_subsetTemp, age_categorical.x == "61-80")$impact_score, size = min(n4160, n6180), replace = FALSE),
+  paired = TRUE
+       )
+tTest5 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "41-60")$impact_score, size = min(n4160, n80), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "80+")$impact_score, size = min(n4160, n80), replace = FALSE), 
+  paired = TRUE
+       )
+tTest6 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "61-80")$impact_score, size = min(n6180, n80), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "80+")$impact_score, size = min(n6180, n80), replace = FALSE), 
+  paired = TRUE
+       )
+tTestHUI3_impact_score <- data.frame("Age Groups" = NA, "95% Confidence Interval" = NA, "P-Value" = NA)
+tTestHUI3_impact_score <-  rbind(tTestHUI3_impact_score, c("< 40 and 41-60           ", paste("(", signif(tTest1$conf.int[1], 3), ", ", signif(tTest1$conf.int[2], 3), ")", sep = ""), signif(tTest1$p.value, 4)))
+tTestHUI3_impact_score <-  rbind(tTestHUI3_impact_score, c("< 40 and 61-80", paste("(", signif(tTest2$conf.int[1], 3), ", ", signif(tTest2$conf.int[2], 3), ")", sep = ""), signif(tTest2$p.value, 4)))
+tTestHUI3_impact_score <-  rbind(tTestHUI3_impact_score, c("< 40 and 80+", paste("(", signif(tTest3$conf.int[1], 3), ", ", signif(tTest3$conf.int[2], 3), ")", sep = ""), signif(tTest3$p.value, 4)))
+tTestHUI3_impact_score <-  rbind(tTestHUI3_impact_score, c("41-60 and 61-80", paste("(", signif(tTest4$conf.int[1], 3), ", ", signif(tTest4$conf.int[2], 3), ")", sep = ""), signif(tTest4$p.value, 4)))
+tTestHUI3_impact_score <-  rbind(tTestHUI3_impact_score, c("41-60 and 80+", paste("(", signif(tTest5$conf.int[1], 3), ", ", signif(tTest5$conf.int[2], 3), ")", sep = ""), signif(tTest5$p.value, 4)))
+tTestHUI3_impact_score <-  rbind(tTestHUI3_impact_score, c("61-80 and 80+", paste("(", signif(tTest6$conf.int[1], 3), ", ", signif(tTest6$conf.int[2], 3), ")", sep = ""), signif(tTest6$p.value, 4)))
+tTestHUI3_impact_score <- tTestHUI3_impact_score[-1, ]
+colnames(tTestHUI3_impact_score) <- c('hui3 data', "95% C.I. mean impact_score difference", "P-Value for t-test")
+write_csv(tTestHUI3_impact_score, "C:/Users/gladi/Desktop/tempCeleriHealthFolder/tTestHUI3_impact_score.csv")
+View(tTestHUI3_impact_score)
+
+```
+
+
+```{r}
+# Creating the table of values
+# The letter indicates the gender and 
+# the number indicates the age category.  
+# That is, m40 indicates only people 
+# who are less than 40.  
+
+####################################################################################HUI3_score
+
+hui3_subset_male <- subset(hui3_subset, patient_gender.x == 'male')
+hui3_subset_female <- subset(hui3_subset, patient_gender.x == 'female')
+
+m40 <- subset(hui3_subset_male, age_categorical.x == "< 40")
+m40 <- subset(hui3_subset_male, age_categorical.x == "< 40")
+m40 <- m40[!is.na(m40$hui3_score), ]
+
+m4160 <- subset(hui3_subset_male, age_categorical.x == "41-60")
+m4160 <- m4160[!is.na(m4160$hui3_score), ]
+
+m6180 <- subset(hui3_subset_male, age_categorical.x == "61-80")
+m6180 <- m6180[!is.na(m6180$hui3_score), ]
+
+m80 <- subset(hui3_subset_male, age_categorical.x == "80+")
+m80 <- m80[!is.na(m80$hui3_score), ]
+
+f40 <- subset(hui3_subset_female, age_categorical.x == "< 40")
+f40 <- f40[!is.na(f40$hui3_score), ]
+
+f4160 <- subset(hui3_subset_female, age_categorical.x == "41-60")
+f4160 <- f4160[!is.na(f4160$hui3_score), ]
+
+f6180 <- subset(hui3_subset_female, age_categorical.x == "61-80")
+f6180 <- f6180[!is.na(f6180$hui3_score), ]
+
+f80 <- subset(hui3_subset_female, age_categorical.x == "80+")
+f80 <- f80[!is.na(f80$hui3_score), ]
+
+mAllAges <- hui3_subset_male[!is.na(hui3_subset_male$hui3_score), ]
+fAllAges <- hui3_subset_female[!is.na(hui3_subset_female$hui3_score), ]
+
+df <- data.frame(age = character(),
+                 mean = double(), 
+                 sd = double(),
+                 stringsAsFactors=FALSE)
+df <- c()
+
+df <- rbind(df, c("< 40", 
+                  mean(m40$hui3_score) - mean(f40$hui3_score), 
+                  sqrt(( ( sd(m40$hui3_score)*sd(m40$hui3_score) )/nrow(m40) ) + ( ( sd(f40$hui3_score)*sd(f40$hui3_score) )/nrow(f40) ))
+            ))
+
+df <- rbind(df, c("41-60", 
+                  mean(m4160$hui3_score) - mean(f4160$hui3_score), 
+                  sqrt(( ( sd(m4160$hui3_score)*sd(m4160$hui3_score) )/nrow(m4160) ) + ( ( sd(f4160$hui3_score)*sd(f4160$hui3_score) )/nrow(f4160) ))
+            ))
+
+df <- rbind(df, c("61-80", 
+                  mean(m6180$hui3_score) - mean(f6180$hui3_score), 
+                  sqrt(( ( sd(m6180$hui3_score)*sd(m6180$hui3_score) )/nrow(m6180) ) + ( ( sd(f6180$hui3_score)*sd(f6180$hui3_score) )/nrow(f6180) ))
+            ))
+
+df <- rbind(df, c("80+", 
+                  mean(m80$hui3_score) - mean(f80$hui3_score), 
+                  sqrt(( ( sd(m80$hui3_score)*sd(m80$hui3_score) )/nrow(m80) ) + ( ( sd(f80$hui3_score)*sd(f80$hui3_score) )/nrow(f80) ))
+            ))
+
+# now all ages are included
+df <- rbind(df, c("all ages", 
+                  mean(mAllAges$hui3_score) - mean(fAllAges$hui3_score), 
+                  sqrt(( ( sd(mAllAges$hui3_score)*sd(mAllAges$hui3_score) )/nrow(mAllAges) ) + ( ( sd(fAllAges$hui3_score)*sd(fAllAges$hui3_score) )/nrow(fAllAges) ))
+            ))
+
+colnames(df) <- c("Age", "Difference_mean", "Standard_Deviation")
+df <- as.data.frame(df)
+df$Age <- as.character(df$Age)
+df$Difference_mean <- as.numeric(as.character(df$Difference_mean))
+df$Standard_Deviation <- as.numeric(as.character(df$Standard_Deviation))
+
+
+ggplot(df, aes(x = Age, Difference_mean)) +
+  geom_errorbar(aes(ymax = Difference_mean + Standard_Deviation, ymin = Difference_mean - Standard_Deviation), width = 0) +
+  geom_point(size = 2) + 
+  theme(panel.background = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.text.x = element_text(angle=80, hjust=1), 
+        text = element_text(size = 10)) + 
+  guides(colour = FALSE) + 
+  xlab("") + ylab("average male hui3_score - average female hui3_score") + 
+  ggtitle("HUI-3 subset of PROMIS data, broken down by male and female hui3_score")
+
+hui3_subsetTemp <- hui3_subset
+
+n40 <- nrow(subset(hui3_subsetTemp, age_categorical.x == "< 40"))
+n4160 <- nrow(subset(hui3_subsetTemp, age_categorical.x == "41-60"))
+n6180 <- nrow(subset(hui3_subsetTemp, age_categorical.x == "61-80"))
+n80 <- nrow(subset(hui3_subsetTemp, age_categorical.x == "80+"))
+tTest1 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "< 40")$hui3_score, size = min(n40, n4160), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "41-60")$hui3_score, size = min(n40, n4160), replace = FALSE), 
+  paired = TRUE
+       )
+tTest2 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "< 40")$hui3_score, size = min(n40, n6180), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "61-80")$hui3_score, size = min(n40, n6180), replace = FALSE), 
+  paired = TRUE
+       )
+tTest3 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "< 40")$hui3_score, size = min(n40, n80), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "80+")$hui3_score, size = min(n40, n80), replace = FALSE), 
+  paired = TRUE
+       )
+tTest4 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "41-60")$hui3_score, size = min(n4160, n6180), replace = FALSE),
+  sample(subset(hui3_subsetTemp, age_categorical.x == "61-80")$hui3_score, size = min(n4160, n6180), replace = FALSE),
+  paired = TRUE
+       )
+tTest5 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "41-60")$hui3_score, size = min(n4160, n80), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "80+")$hui3_score, size = min(n4160, n80), replace = FALSE), 
+  paired = TRUE
+       )
+tTest6 <- t.test(
+  sample(subset(hui3_subsetTemp, age_categorical.x == "61-80")$hui3_score, size = min(n6180, n80), replace = FALSE), 
+  sample(subset(hui3_subsetTemp, age_categorical.x == "80+")$hui3_score, size = min(n6180, n80), replace = FALSE), 
+  paired = TRUE
+       )
+tTestHUI3_hui3_score <- data.frame("Age Groups" = NA, "95% Confidence Interval" = NA, "P-Value" = NA)
+tTestHUI3_hui3_score <-  rbind(tTestHUI3_hui3_score, c("< 40 and 41-60           ", paste("(", signif(tTest1$conf.int[1], 3), ", ", signif(tTest1$conf.int[2], 3), ")", sep = ""), signif(tTest1$p.value, 4)))
+tTestHUI3_hui3_score <-  rbind(tTestHUI3_hui3_score, c("< 40 and 61-80", paste("(", signif(tTest2$conf.int[1], 3), ", ", signif(tTest2$conf.int[2], 3), ")", sep = ""), signif(tTest2$p.value, 4)))
+tTestHUI3_hui3_score <-  rbind(tTestHUI3_hui3_score, c("< 40 and 80+", paste("(", signif(tTest3$conf.int[1], 3), ", ", signif(tTest3$conf.int[2], 3), ")", sep = ""), signif(tTest3$p.value, 4)))
+tTestHUI3_hui3_score <-  rbind(tTestHUI3_hui3_score, c("41-60 and 61-80", paste("(", signif(tTest4$conf.int[1], 3), ", ", signif(tTest4$conf.int[2], 3), ")", sep = ""), signif(tTest4$p.value, 4)))
+tTestHUI3_hui3_score <-  rbind(tTestHUI3_hui3_score, c("41-60 and 80+", paste("(", signif(tTest5$conf.int[1], 3), ", ", signif(tTest5$conf.int[2], 3), ")", sep = ""), signif(tTest5$p.value, 4)))
+tTestHUI3_hui3_score <-  rbind(tTestHUI3_hui3_score, c("61-80 and 80+", paste("(", signif(tTest6$conf.int[1], 3), ", ", signif(tTest6$conf.int[2], 3), ")", sep = ""), signif(tTest6$p.value, 4)))
+tTestHUI3_hui3_score <- tTestHUI3_hui3_score[-1, ]
+colnames(tTestHUI3_hui3_score) <- c('hui3 data', "95% C.I. mean hui3_score difference", "P-Value for t-test")
+write_csv(tTestHUI3_hui3_score, "C:/Users/gladi/Desktop/tempCeleriHealthFolder/tTestHUI3_hui3_score.csv")
+View(tTestHUI3_hui3_score)
+```
+
+```{r}
+# stimpact_hui3 data visualization.  Age proportions.  
+hui3_subsetg1 <- hui3_subset %>% drop_na(team_name, patient_gender.x, age_categorical.x)
+ggplot(hui3_subsetg1, 
+       aes(x = `team_name`, fill = `age_categorical.x`)) + 
+  geom_bar(position = "fill") + 
+  labs(title = "the hui3 dataset", x = "team name", y = "", fill = "Age Group") + 
+  theme_test() + 
+  theme(axis.ticks = element_blank(), 
+        axis.text.x = element_text(angle=45, hjust=1)) + 
+  facet_wrap(~patient_gender.x)
+```
+
+```{r}
+ggplot(hui3_subsetg1, aes(x = hui3_score, fill = patient_gender.x)) + 
+    geom_histogram(position="dodge", binwidth = 0.01) + 
+    geom_vline(data = ddply(subset(hui3_subsetg1, !is.na(hui3_score)), "patient_gender.x", summarize, meanValue = mean(hui3_score)), aes(xintercept = meanValue, color=patient_gender.x), linetype = "dashed", show.legend = FALSE) + 
+    theme_test() + theme(legend.position = "top") + labs(fill = "patient gender") + labs(y = "")
+```
+
+
+
+
+
+
+
+
+
+
